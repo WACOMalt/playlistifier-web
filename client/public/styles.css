@@ -110,6 +110,15 @@ button:hover {
     background: #5a6fd8;
 }
 
+/* Download button green styling */
+#download-btn {
+    background: #28a745;
+}
+
+#download-btn:hover {
+    background: #218838;
+}
+
 button:disabled {
     background: #ccc;
     cursor: not-allowed;
@@ -326,27 +335,27 @@ button:active {
 }
 
 .track-status.pending {
-    background: #f39c12;
+    background: #6c757d;
     color: white;
 }
 
 .track-status.searching {
-    background: #3498db;
-    color: white;
+    background: #87ceeb;
+    color: #333;
 }
 
 .track-status.found {
-    background: #2ecc71;
+    background: #007bff;
     color: white;
 }
 
 .track-status.downloading {
-    background: #9b59b6;
+    background: #ff8c00;
     color: white;
 }
 
 .track-status.completed {
-    background: #2ecc71;
+    background: #28a745;
     color: white;
 }
 
@@ -356,7 +365,7 @@ button:active {
 }
 
 .track-status.not-found {
-    background: #e67e22;
+    background: #8b4513;
     color: white;
 }
 
