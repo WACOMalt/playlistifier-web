@@ -90,6 +90,9 @@ typings/
 # Downloads directory
 downloads/
 
+# Tools directory with large binaries
+tools/
+
 # Logs
 logs
 *.log
