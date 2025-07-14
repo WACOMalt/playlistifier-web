@@ -328,10 +328,14 @@ button:active {
 }
 
 .track-status {
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.8rem;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
     font-weight: 500;
+    min-width: 120px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
 }
 
 .track-status.pending {
@@ -354,6 +358,23 @@ button:active {
     color: white;
 }
 
+.track-status.downloading .progress-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #28a745, #218838);
+    transition: width 0.3s ease;
+    z-index: 1;
+}
+
+.track-status.downloading .progress-text {
+    position: relative;
+    z-index: 2;
+    color: white;
+    font-weight: 500;
+}
+
 .track-status.completed {
     background: #28a745;
     color: white;
@@ -367,6 +388,30 @@ button:active {
 .track-status.not-found {
     background: #8b4513;
     color: white;
+}
+
+.track-download-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.track-download-btn:hover {
+    background: #218838;
+}
+
+.track-download-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.track-download-btn.hidden {
+    display: none;
 }
 
 /* Footer styles */

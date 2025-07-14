@@ -47,6 +47,26 @@ class PlaylistifierApp {
             this.updateDownloadProgress(data);
         });
 
+        this.socket.on('track-download-start', (data) => {
+            this.updateTrackStatus(data.trackId, 'downloading', 'Downloading...');
+        });
+
+        this.socket.on('track-progress', (data) => {
+            const trackEl = document.querySelector(`[data-track-id="${data.trackId}"]`);
+            if (trackEl) {
+                const progressBar = trackEl.querySelector('.progress-bar');
+                const progressText = trackEl.querySelector('.progress-text');
+
+                if (progressBar) {
+                    progressBar.style.width = `${data.progress}%`;
+                }
+
+                if (progressText) {
+                    progressText.textContent = `${data.progress}% - Downloading...`;
+                }
+            }
+        });
+
         this.socket.on('download-complete', (data) => {
             this.handleTrackComplete(data);
         });
@@ -272,6 +292,64 @@ class PlaylistifierApp {
         this.restart();
     }
 
+    async downloadSingleTrack(trackId) {
+        if (!this.currentTracks[trackId]) {
+            this.showError('Track not found');
+            return;
+        }
+
+        const track = this.currentTracks[trackId];
+        const button = document.querySelector(`[data-track-id="${trackId}"] .track-download-btn`);
+        
+        button.disabled = true;
+        button.textContent = 'Downloading...';
+        
+        this.updateTrackStatus(trackId, 'downloading', 'Downloading...');
+
+        try {
+            const response = await fetch('/api/download/single', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    track: track,
+                    trackId: trackId,
+                    options: {
+                        format: 'mp3',
+                        quality: 'best',
+                        includeTrackNumbers: false
+                    }
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Download failed');
+            }
+
+            // Create download link
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${track.artist} - ${track.title}.mp3`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            this.updateTrackStatus(trackId, 'completed', 'Completed');
+            button.textContent = 'Download Again';
+            button.disabled = false;
+
+        } catch (error) {
+            this.updateTrackStatus(trackId, 'error', 'Error');
+            button.textContent = 'Retry Download';
+            button.disabled = false;
+            this.showError(`Download failed: ${error.message}`);
+        }
+    }
+
     // UI Helper Methods
     showError(message) {
         const errorEl = document.getElementById('url-error');
@@ -343,8 +421,17 @@ class PlaylistifierApp {
                     <div class="track-artist">${track.artist || 'Unknown Artist'}</div>
                 </div>
                 <div class="track-status pending">Pending</div>
+                <button class="track-download-btn hidden" disabled>Download</button>
             </div>
         `).join('');
+        
+        // Add event listeners for download buttons
+        tracksList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('track-download-btn')) {
+                const trackId = e.target.closest('.track-item').dataset.trackId;
+                this.downloadSingleTrack(trackId);
+            }
+        });
         
         // Generate YouTube URLs text
         this.generateYouTubeUrls(tracks, metadata);
@@ -396,8 +483,16 @@ class PlaylistifierApp {
         const trackEl = document.querySelector(`[data-track-id="${trackIndex}"]`);
         if (trackEl) {
             const statusEl = trackEl.querySelector('.track-status');
+            const downloadBtn = trackEl.querySelector('.track-download-btn');
             statusEl.textContent = statusText;
             statusEl.className = `track-status ${statusClass}`;
+
+            if (statusClass === 'downloading') {
+                statusEl.innerHTML = `<div class="progress-bar" style="width: 0%"></div><span class="progress-text">Downloading...</span>`;
+            } else if (statusClass === 'completed') {
+                downloadBtn.classList.remove('hidden');
+                downloadBtn.disabled = false;
+            }
         }
     }
 
