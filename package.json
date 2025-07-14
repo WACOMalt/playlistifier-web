@@ -1,0 +1,41 @@
+{
+  "name": "playlistifier-web",
+  "version": "1.0.0",
+  "description": "Web-based playlist converter for Spotify and YouTube with real-time progress tracking",
+  "main": "server/app.js",
+  "scripts": {
+    "setup": "node setup.js",
+    "start": "node server/app.js",
+    "dev": "nodemon server/app.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "build": "npm run test && npm run lint",
+    "lint": "echo \"Linting not configured yet\""
+  },
+  "keywords": [
+    "playlist",
+    "converter",
+    "spotify",
+    "youtube",
+    "mp3",
+    "download"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.0",
+    "express": "^4.18.2",
+    "express-session": "^1.18.1",
+    "helmet": "^8.1.0",
+    "node-fetch": "^2.7.0",
+    "socket.io": "^4.8.1",
+    "yauzl": "^3.2.0"
+  },
+  "devDependencies": {
+    "jest": "^30.0.4",
+    "nodemon": "^3.1.10",
+    "supertest": "^7.1.3"
+  }
+}

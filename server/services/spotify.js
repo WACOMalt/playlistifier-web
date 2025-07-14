@@ -1,0 +1,226 @@
+const https = require('https');
+const querystring = require('querystring');
+
+class SpotifyService {
+    constructor() {
+        this.baseUrl = 'https://api.spotify.com/v1';
+    }
+
+    async makeRequest(endpoint, token, options = {}) {
+        const url = `${this.baseUrl}${endpoint}`;
+        
+        return new Promise((resolve, reject) => {
+            const requestOptions = {
+                method: options.method || 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            };
+
+            const req = https.request(url, requestOptions, (res) => {
+                let data = '';
+                
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+                
+                res.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(data);
+                        
+                        if (res.statusCode >= 200 && res.statusCode < 300) {
+                            resolve(parsed);
+                        } else {
+                            reject(new Error(parsed.error?.message || `HTTP ${res.statusCode}`));
+                        }
+                    } catch (error) {
+                        reject(new Error('Invalid JSON response'));
+                    }
+                });
+            });
+
+            req.on('error', (error) => {
+                reject(error);
+            });
+
+            if (options.body) {
+                req.write(JSON.stringify(options.body));
+            }
+
+            req.end();
+        });
+    }
+
+    async getPlaylist(playlistId, token) {
+        try {
+            const playlist = await this.makeRequest(`/playlists/${playlistId}`, token);
+            const tracks = await this.getPlaylistTracks(playlistId, token);
+            
+            return {
+                id: playlist.id,
+                name: playlist.name,
+                description: playlist.description,
+                owner: playlist.owner.display_name,
+                public: playlist.public,
+                tracks: tracks,
+                total: tracks.length,
+                images: playlist.images
+            };
+        } catch (error) {
+            throw new Error(`Failed to get playlist: ${error.message}`);
+        }
+    }
+
+    async getPlaylistTracks(playlistId, token) {
+        const tracks = [];
+        let nextUrl = `/playlists/${playlistId}/tracks?limit=50`;
+        
+        while (nextUrl) {
+            try {
+                const response = await this.makeRequest(nextUrl, token);
+                
+                response.items.forEach(item => {
+                    if (item.track && item.track.type === 'track') {
+                        tracks.push(this.formatTrack(item.track));
+                    }
+                });
+                
+                nextUrl = response.next ? response.next.replace(this.baseUrl, '') : null;
+            } catch (error) {
+                console.error('Error fetching playlist tracks:', error);
+                break;
+            }
+        }
+        
+        return tracks;
+    }
+
+    async getAlbum(albumId, token) {
+        try {
+            const album = await this.makeRequest(`/albums/${albumId}`, token);
+            
+            const tracks = album.tracks.items.map(track => this.formatTrack({
+                ...track,
+                album: {
+                    name: album.name,
+                    images: album.images
+                }
+            }));
+            
+            return {
+                id: album.id,
+                name: album.name,
+                artist: album.artists[0]?.name,
+                release_date: album.release_date,
+                tracks: tracks,
+                total: tracks.length,
+                images: album.images
+            };
+        } catch (error) {
+            throw new Error(`Failed to get album: ${error.message}`);
+        }
+    }
+
+    async getTrack(trackId, token) {
+        try {
+            const track = await this.makeRequest(`/tracks/${trackId}`, token);
+            
+            return {
+                tracks: [this.formatTrack(track)],
+                total: 1,
+                name: track.name,
+                artist: track.artists[0]?.name
+            };
+        } catch (error) {
+            throw new Error(`Failed to get track: ${error.message}`);
+        }
+    }
+
+    formatTrack(track) {
+        return {
+            id: track.id,
+            title: track.name,
+            artist: track.artists?.map(artist => artist.name).join(', ') || 'Unknown Artist',
+            album: track.album?.name || 'Unknown Album',
+            duration_ms: track.duration_ms,
+            duration: this.formatDuration(track.duration_ms),
+            explicit: track.explicit,
+            preview_url: track.preview_url,
+            external_urls: track.external_urls,
+            images: track.album?.images || [],
+            search_query: `${track.artists?.map(artist => artist.name).join(', ')} ${track.name}`.trim()
+        };
+    }
+
+    formatDuration(ms) {
+        if (!ms) return 'Unknown';
+        
+        const minutes = Math.floor(ms / 60000);
+        const seconds = Math.floor((ms % 60000) / 1000);
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    extractIdFromUrl(url) {
+        // Handle both web URLs and URI format
+        const patterns = [
+            /https?:\/\/open\.spotify\.com\/(playlist|album|track)\/([a-zA-Z0-9]+)/,
+            /spotify:(playlist|album|track):([a-zA-Z0-9]+)/
+        ];
+        
+        for (const pattern of patterns) {
+            const match = url.match(pattern);
+            if (match) {
+                return {
+                    type: match[1],
+                    id: match[2]
+                };
+            }
+        }
+        
+        return null;
+    }
+
+    async extractContent(url, token) {
+        const extracted = this.extractIdFromUrl(url);
+        
+        if (!extracted) {
+            throw new Error('Invalid Spotify URL format');
+        }
+
+        switch (extracted.type) {
+            case 'playlist':
+                return await this.getPlaylist(extracted.id, token);
+            case 'album':
+                return await this.getAlbum(extracted.id, token);
+            case 'track':
+                return await this.getTrack(extracted.id, token);
+            default:
+                throw new Error('Unsupported Spotify content type');
+        }
+    }
+
+    async searchTrack(query, token) {
+        try {
+            const searchQuery = querystring.stringify({
+                q: query,
+                type: 'track',
+                limit: 1
+            });
+            
+            const response = await this.makeRequest(`/search?${searchQuery}`, token);
+            
+            if (response.tracks.items.length > 0) {
+                return this.formatTrack(response.tracks.items[0]);
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('Search error:', error);
+            return null;
+        }
+    }
+}
+
+module.exports = new SpotifyService();
