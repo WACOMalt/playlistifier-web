@@ -959,74 +959,28 @@ async performRealTimeVideoSearch(tracks, header) {
         this.rawUrlData = [];
         
         try {
-            // Search for each track individually to show real-time updates
-            for (let i = 0; i < tracks.length; i++) {
-                const track = tracks[i];
-                const query = `${track.artist} ${track.title}`.trim();
-                
-                // Update track status to "Searching..."
-                this.updateTrackStatus(i, 'searching', 'Searching...');
-                
-                // Update progress
-                progressDiv.innerHTML = `Searching ${i + 1}/${tracks.length}: ${query}\n`;
+            // Always use concurrent search if there are multiple tracks
+            if (tracks.length > 1) {
+                // Use batched concurrent search with 5 tracks at a time
+                progressDiv.innerHTML = `Searching ${tracks.length} tracks in batches of 5...\n`;
                 
                 try {
-                    // Search for individual track
-                    const response = await fetch('/api/search/youtube-urls', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ tracks: [track] }),
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (response.ok && data.results && data.results.length > 0) {
-                        const result = data.results[0];
-                        const trackNumber = String(i + 1).padStart(2, '0');
-                        const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
-                        
-                        if (result.found && result.url) {
-                            this.rawUrlData.push(trackTitle, result.url);
-                            found++;
-                            progressDiv.innerHTML += `✓ Found: ${result.url}\n`;
-                            // Update track status to "Found"
-                            this.updateTrackStatus(i, 'found', 'Found');
-                            // Update the track object with the found URL
-                            this.currentTracks[i].url = result.url;
-                        } else {
-                            this.rawUrlData.push(trackTitle, '# Not found');
-                            failed++;
-                            progressDiv.innerHTML += `✗ Not found: ${query}\n`;
-                            // Update track status to "Not Found"
-                            this.updateTrackStatus(i, 'not-found', 'Not Found');
-                        }
-                    } else {
-                        const trackNumber = String(i + 1).padStart(2, '0');
-                        const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
-                        this.rawUrlData.push(trackTitle, '# Not found');
-                        failed++;
-                        progressDiv.innerHTML += `✗ Search failed: ${query}\n`;
-                        // Update track status to "Not Found"
-                        this.updateTrackStatus(i, 'not-found', 'Not Found');
-                    }
+                    const result = await this.performBatchedSearch(tracks, progressDiv, 5);
+                    found = result.found;
+                    failed = result.failed;
                 } catch (error) {
-                    console.error(`Search failed for track ${i}:`, error);
-                    const trackNumber = String(i + 1).padStart(2, '0');
-                    const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
-                    this.rawUrlData.push(trackTitle, '# Error');
-                    failed++;
-                    progressDiv.innerHTML += `✗ Error: ${query} - ${error.message}\n`;
-                    // Update track status to "Error"
-                    this.updateTrackStatus(i, 'error', 'Error');
+                    console.error('Batched search failed, falling back to sequential:', error);
+                    progressDiv.innerHTML += `Batched search failed, falling back to sequential...\n`;
+                    // Fall back to sequential search
+                    const result = await this.performSequentialSearch(tracks, progressDiv);
+                    found = result.found;
+                    failed = result.failed;
                 }
-                
-                // Update the textarea with current results based on checkbox state
-                this.toggleTrackInfo();
-                
-                // Scroll to bottom of textarea
-                youtubeUrlsTextarea.scrollTop = youtubeUrlsTextarea.scrollHeight;
+            } else {
+                // Use sequential search for single track
+                const result = await this.performSequentialSearch(tracks, progressDiv);
+                found = result.found;
+                failed = result.failed;
             }
             
             // Final summary
@@ -1053,6 +1007,166 @@ async performRealTimeVideoSearch(tracks, header) {
             searchButton.disabled = false;
             searchButton.textContent = 'Re-search YouTube URLs';
         }
+    }
+    
+    async performSequentialSearch(tracks, progressDiv) {
+        let found = 0;
+        let failed = 0;
+        
+        // Search for each track individually to show real-time updates
+        for (let i = 0; i < tracks.length; i++) {
+            const track = tracks[i];
+            const query = `${track.artist} ${track.title}`.trim();
+            
+            // Update track status to "Searching..."
+            this.updateTrackStatus(i, 'searching', 'Searching...');
+            
+            // Update progress
+            progressDiv.innerHTML += `Searching ${i + 1}/${tracks.length}: ${query}\n`;
+            
+            try {
+                // Search for individual track
+                const response = await fetch('/api/search/youtube-urls', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ tracks: [track], concurrent: false }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.results && data.results.length > 0) {
+                    const result = data.results[0];
+                    const trackNumber = String(i + 1).padStart(2, '0');
+                    const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
+                    
+                    if (result.found && result.url) {
+                        this.rawUrlData.push(trackTitle, result.url);
+                        found++;
+                        progressDiv.innerHTML += `✓ Found: ${result.url}\n`;
+                        // Update track status to "Found"
+                        this.updateTrackStatus(i, 'found', 'Found');
+                        // Update the track object with the found URL
+                        this.currentTracks[i].url = result.url;
+                    } else {
+                        this.rawUrlData.push(trackTitle, '# Not found');
+                        failed++;
+                        progressDiv.innerHTML += `✗ Not found: ${query}\n`;
+                        // Update track status to "Not Found"
+                        this.updateTrackStatus(i, 'not-found', 'Not Found');
+                    }
+                } else {
+                    const trackNumber = String(i + 1).padStart(2, '0');
+                    const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
+                    this.rawUrlData.push(trackTitle, '# Not found');
+                    failed++;
+                    progressDiv.innerHTML += `✗ Search failed: ${query}\n`;
+                    // Update track status to "Not Found"
+                    this.updateTrackStatus(i, 'not-found', 'Not Found');
+                }
+            } catch (error) {
+                console.error(`Search failed for track ${i}:`, error);
+                const trackNumber = String(i + 1).padStart(2, '0');
+                const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
+                this.rawUrlData.push(trackTitle, '# Error');
+                failed++;
+                progressDiv.innerHTML += `✗ Error: ${query} - ${error.message}\n`;
+                // Update track status to "Error"
+                this.updateTrackStatus(i, 'error', 'Error');
+            }
+            
+            // Update the textarea with current results based on checkbox state
+            this.toggleTrackInfo();
+            
+            // Scroll to bottom of textarea
+            const youtubeUrlsTextarea = document.getElementById('youtube-urls');
+            youtubeUrlsTextarea.scrollTop = youtubeUrlsTextarea.scrollHeight;
+        }
+        
+        return { found, failed };
+    }
+    
+    async performBatchedSearch(tracks, progressDiv, batchSize = 5) {
+        let found = 0;
+        let failed = 0;
+        
+        // Process tracks in batches
+        for (let i = 0; i < tracks.length; i += batchSize) {
+            const batch = tracks.slice(i, i + batchSize);
+            const batchStart = i;
+            const batchEnd = Math.min(i + batchSize, tracks.length);
+            
+            progressDiv.innerHTML += `\nProcessing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(tracks.length / batchSize)} (tracks ${batchStart + 1}-${batchEnd})...\n`;
+            
+            // Update batch tracks to searching status
+            batch.forEach((track, index) => {
+                this.updateTrackStatus(batchStart + index, 'searching', 'Searching...');
+            });
+            
+            try {
+                const response = await fetch('/api/search/bulk-youtube-urls', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ tracks: batch, concurrency: batchSize }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.results) {
+                    // Process results for this batch
+                    data.results.forEach((result, batchIndex) => {
+                        const actualIndex = batchStart + batchIndex;
+                        const trackNumber = String(actualIndex + 1).padStart(2, '0');
+                        const trackTitle = `${trackNumber}. ${tracks[actualIndex].artist} - ${tracks[actualIndex].title}`;
+                        
+                        if (result.found && result.url) {
+                            this.rawUrlData.push(trackTitle, result.url);
+                            found++;
+                            progressDiv.innerHTML += `✓ Found: ${result.url}\n`;
+                            this.updateTrackStatus(actualIndex, 'found', 'Found');
+                            this.currentTracks[actualIndex].url = result.url;
+                        } else {
+                            this.rawUrlData.push(trackTitle, '# Not found');
+                            failed++;
+                            progressDiv.innerHTML += `✗ Not found: ${tracks[actualIndex].artist} - ${tracks[actualIndex].title}\n`;
+                            this.updateTrackStatus(actualIndex, 'not-found', 'Not Found');
+                        }
+                    });
+                    
+                    // Update the textarea with current results
+                    this.toggleTrackInfo();
+                    
+                    // Scroll to bottom of textarea
+                    const youtubeUrlsTextarea = document.getElementById('youtube-urls');
+                    youtubeUrlsTextarea.scrollTop = youtubeUrlsTextarea.scrollHeight;
+                } else {
+                    throw new Error(data.error || 'Batch search failed');
+                }
+            } catch (error) {
+                console.error(`Batch search failed for batch ${Math.floor(i / batchSize) + 1}:`, error);
+                progressDiv.innerHTML += `✗ Batch ${Math.floor(i / batchSize) + 1} failed: ${error.message}\n`;
+                
+                // Mark all tracks in this batch as failed
+                batch.forEach((track, index) => {
+                    const actualIndex = batchStart + index;
+                    const trackNumber = String(actualIndex + 1).padStart(2, '0');
+                    const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
+                    this.rawUrlData.push(trackTitle, '# Error');
+                    failed++;
+                    this.updateTrackStatus(actualIndex, 'error', 'Error');
+                });
+            }
+            
+            // Add a small delay between batches to prevent overwhelming the server
+            if (i + batchSize < tracks.length) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        
+        return { found, failed };
     }
     
 async searchVideoUrls() {
