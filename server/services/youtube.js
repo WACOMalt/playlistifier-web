@@ -150,16 +150,21 @@ class YouTubeService {
             }
 
             const playlistInfo = entries[0];
-            const tracks = entries.filter(entry => entry._type === 'video')
-                                 .map(entry => this.formatTrack(entry));
+            // Filter entries that are actual video entries (either 'video' or 'url' type)
+            const tracks = entries.filter(entry => 
+                entry._type === 'video' || 
+                (entry._type === 'url' && entry.id && entry.title)
+            ).map(entry => this.formatTrack(entry));
 
             return {
-                id: playlistInfo.id,
-                title: playlistInfo.title || 'YouTube Playlist',
-                uploader: playlistInfo.uploader,
+                id: playlistInfo.playlist_id || playlistInfo.id,
+                title: playlistInfo.playlist_title || playlistInfo.title || 'YouTube Playlist',
+                uploader: playlistInfo.playlist_uploader || playlistInfo.uploader,
                 description: playlistInfo.description,
                 tracks: tracks,
-                total: tracks.length
+                total: tracks.length,
+                platform: 'youtube',
+                name: playlistInfo.playlist_title || playlistInfo.title || 'YouTube Playlist'
             };
         } catch (error) {
             throw new Error(`Failed to get playlist info: ${error.message}`);
@@ -170,9 +175,11 @@ class YouTubeService {
         try {
             const entries = await this.extractInfo(url);
             
-            const videos = entries.filter(entry => entry._type === 'video')
-                                 .slice(0, 50) // Limit to first 50 videos
-                                 .map(entry => this.formatTrack(entry));
+            const videos = entries.filter(entry => 
+                entry._type === 'video' || 
+                (entry._type === 'url' && entry.id && entry.title)
+            ).slice(0, 50) // Limit to first 50 videos
+             .map(entry => this.formatTrack(entry));
 
             const channelInfo = entries[0];
 
