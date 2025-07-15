@@ -574,7 +574,7 @@ class DownloadService {
         const download = this.downloads.get(downloadId);
         if (download && download.downloadPath) {
             // Clean up temporary files
-            fs.rmdir(download.downloadPath, { recursive: true }).catch(error => {
+            fs.rm(download.downloadPath, { recursive: true, force: true }).catch(error => {
                 console.error('Failed to cleanup temp directory:', error);
             });
             this.downloads.delete(downloadId);
@@ -633,7 +633,7 @@ class DownloadService {
             try {
                 const files = await fs.readdir(dir);
                 if (files.length === 0) {
-                    await fs.rmdir(dir);
+                    await fs.rm(dir, { recursive: true, force: true });
                     console.log(`Deleted empty directory: ${dir}`);
                 }
             } catch (error) {

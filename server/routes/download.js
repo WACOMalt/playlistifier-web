@@ -172,14 +172,14 @@ router.post('/', async (req, res) => {
 
     // Start download process asynchronously
     const io = req.app.get('io');
-    downloadService.startDownload(downloadId, io).catch(error => {
+    downloadService.startDownload(downloadId, io).catch(error => {
       console.error('Download process error:', error);
     });
 
     // Track files for session cleanup
     const downloadStatus = downloadService.getDownloadStatus(downloadId);
-    if (downloadStatus && downloadStatus.results) {
-      downloadStatus.results.forEach(result => {
+    if (downloadStatus && downloadStatus.results) {
+      downloadStatus.results.forEach(result => {
         if (result.status === 'completed') {
           const filePath = path.join(downloadStatus.downloadPath, result.filename);
           downloadService.trackFileForSession(sessionId, filePath);
