@@ -1007,7 +1007,20 @@ async searchVideoUrls() {
         }
     }
 
-    restart() {
+    async restart() {
+        // Clean up any downloaded files from this session
+        try {
+            await fetch('/api/download/cleanup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+            console.log('Session files cleaned up');
+        } catch (error) {
+            console.error('Failed to cleanup session files:', error);
+        }
+        
         // Reset state
         this.currentUrl = '';
         this.currentTracks = [];

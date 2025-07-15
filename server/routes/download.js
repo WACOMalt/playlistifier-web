@@ -129,6 +129,12 @@ router.post('/single', async (req, res) => {
       
       fileStream.pipe(res);
       
+      // Track file for session cleanup
+      const sessionId = req.session.id;
+      if (sessionId) {
+        downloadService.trackFileForSession(sessionId, result.filePath);
+      }
+      
       // Clean up after sending
       fileStream.on('end', () => {
         setTimeout(() => {
@@ -162,12 +168,24 @@ router.post('/', async (req, res) => {
     }
 
     const downloadId = await downloadService.createDownload(tracks, options);
-    
+    const sessionId = req.session.id; // Track download with session
+
     // Start download process asynchronously
     const io = req.app.get('io');
-    downloadService.startDownload(downloadId, io).catch(error => {
+    downloadService.startDownload(downloadId, io).catch(error => {
       console.error('Download process error:', error);
     });
+
+    // Track files for session cleanup
+    const downloadStatus = downloadService.getDownloadStatus(downloadId);
+    if (downloadStatus && downloadStatus.results) {
+      downloadStatus.results.forEach(result => {
+        if (result.status === 'completed') {
+          const filePath = path.join(downloadStatus.downloadPath, result.filename);
+          downloadService.trackFileForSession(sessionId, filePath);
+        }
+      });
+    }
 
     res.json({ downloadId });
   } catch (error) {
@@ -203,6 +221,22 @@ router.post('/:id/cancel', (req, res) => {
   } catch (error) {
     console.error('Cancellation error:', error);
     res.status(500).json({ error: 'Failed to cancel download' });
+  }
+});
+
+// Cleanup session files (when processing another URL)
+router.post('/cleanup', async (req, res) => {
+  try {
+    const sessionId = req.session.id;
+    if (sessionId) {
+      await downloadService.cleanupSessionFiles(sessionId);
+      res.json({ success: true, message: 'Session files cleaned up' });
+    } else {
+      res.json({ success: false, message: 'No session found' });
+    }
+  } catch (error) {
+    console.error('Cleanup error:', error);
+    res.status(500).json({ error: 'Failed to cleanup files' });
   }
 });
 

@@ -9,6 +9,19 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
+
+// Session configuration
+const sessionMiddleware = session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: true,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+});
+
 const io = socketIo(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production' ? false : "http://localhost:3000",
@@ -20,17 +33,13 @@ const io = socketIo(server, {
 app.use(helmet());
 app.use(cors());
 
-// Session configuration
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
-}));
+// Use session middleware
+app.use(sessionMiddleware);
+
+// Share session with socket.io
+io.use((socket, next) => {
+  sessionMiddleware(socket.request, {}, next);
+});
 
 // Parse JSON bodies
 app.use(express.json());
@@ -69,9 +78,14 @@ io.on('connection', (socket) => {
     // TODO: Implement download cancellation logic
   });
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
+    socket.on('disconnect', async () => {
+        console.log('Client disconnected:', socket.id);
+        const sessionId = socket.request.session?.id;
+        if (sessionId) {
+            console.log(`Cleaning up files for session: ${sessionId}`);
+            await require('./services/downloader').cleanupSessionFiles(sessionId);
+        }
+    });
 });
 
 // Make io available to routes

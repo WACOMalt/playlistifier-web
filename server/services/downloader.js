@@ -8,6 +8,7 @@ const setupManager = require('../utils/setup');
 class DownloadService {
     constructor() {
         this.downloads = new Map();
+        this.sessionFiles = new Map(); // Track files by session ID
         this.defaultDownloadPath = process.env.DOWNLOAD_PATH || './downloads';
     }
 
@@ -89,11 +90,12 @@ class DownloadService {
             try {
                 await this.downloadTrack(track, download, socketIo, i);
                 download.completedTracks++;
+                const filename = this.generateFilename(track, i, download.options);
                 download.results.push({
                     trackId: i,
                     track: track,
                     status: 'completed',
-                    filename: this.generateFilename(track, i, download.options)
+                    filename: filename
                 });
                 
                 socketIo.to(`download-${download.id}`).emit('download-complete', {
@@ -587,6 +589,80 @@ class DownloadService {
             if (now - download.startTime.getTime() > maxAge) {
                 this.downloads.delete(id);
             }
+        }
+    }
+
+    // Track a file for a session
+    trackFileForSession(sessionId, filePath) {
+        if (!this.sessionFiles.has(sessionId)) {
+            this.sessionFiles.set(sessionId, new Set());
+        }
+        this.sessionFiles.get(sessionId).add(filePath);
+        console.log(`Tracking file for session ${sessionId}: ${filePath}`);
+    }
+
+    // Clean up all files for a session (instant deletion, no recycle bin)
+    async cleanupSessionFiles(sessionId) {
+        const sessionFiles = this.sessionFiles.get(sessionId);
+        if (!sessionFiles) {
+            return;
+        }
+
+        console.log(`Cleaning up ${sessionFiles.size} files for session ${sessionId}`);
+        
+        for (const filePath of sessionFiles) {
+            try {
+                await fs.access(filePath);
+                await fs.unlink(filePath); // Direct deletion, bypasses recycle bin
+                console.log(`Deleted file: ${filePath}`);
+            } catch (error) {
+                console.log(`File already deleted or not found: ${filePath}`);
+            }
+        }
+
+        // Also clean up directories if they're empty
+        const directories = new Set();
+        for (const filePath of sessionFiles) {
+            const dir = path.dirname(filePath);
+            if (dir.includes('temp') || dir.includes('download-')) {
+                directories.add(dir);
+            }
+        }
+
+        for (const dir of directories) {
+            try {
+                const files = await fs.readdir(dir);
+                if (files.length === 0) {
+                    await fs.rmdir(dir);
+                    console.log(`Deleted empty directory: ${dir}`);
+                }
+            } catch (error) {
+                console.log(`Directory cleanup failed: ${dir}`);
+            }
+        }
+
+        this.sessionFiles.delete(sessionId);
+        console.log(`Session ${sessionId} cleanup completed`);
+    }
+
+    // Clean up all temporary files and directories
+    async cleanupAllTempFiles() {
+        try {
+            const tempPath = path.join(this.defaultDownloadPath, 'temp');
+            await fs.access(tempPath);
+            const tempDirs = await fs.readdir(tempPath);
+            
+            for (const dir of tempDirs) {
+                const dirPath = path.join(tempPath, dir);
+                try {
+                    await fs.rm(dirPath, { recursive: true, force: true });
+                    console.log(`Cleaned up temp directory: ${dirPath}`);
+                } catch (error) {
+                    console.log(`Failed to clean temp directory: ${dirPath}`);
+                }
+            }
+        } catch (error) {
+            console.log('No temp directory to clean up');
         }
     }
 }
