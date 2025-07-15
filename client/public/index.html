@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Playlistifier Web</title>
+    <link rel="stylesheet" href="https://unpkg.com/98.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -14,76 +15,134 @@
         </header>
 
         <main>
-            <div id="url-input-section" class="section">
-                <h2>Enter Playlist URL</h2>
-                <div class="input-group">
-                    <input type="text" id="url-input" placeholder="Paste your playlist URL here..." />
-                    <button id="analyze-btn">Analyze</button>
+            <div id="url-input-section" class="window">
+                <div class="title-bar">
+                    <div class="title-bar-text">Enter Playlist URL</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
                 </div>
-                <div id="url-error" class="error-message"></div>
-                <div id="url-status" class="status-message"></div>
+                <div class="window-body">
+                    <div class="input-group">
+                        <input type="text" id="url-input" placeholder="Paste your playlist URL here..." />
+                        <button id="analyze-btn">Analyze</button>
+                    </div>
+                    <div id="url-error" class="error-message"></div>
+                    <div id="url-status" class="status-message"></div>
+                </div>
             </div>
 
-            <div id="auth-section" class="section hidden">
-                <h2>Authentication Required</h2>
-                <p>This playlist requires authentication with Spotify.</p>
-                <button id="spotify-auth-btn">Connect to Spotify</button>
-                <div id="auth-status" class="status-message"></div>
+            <div id="auth-section" class="window hidden">
+                <div class="title-bar">
+                    <div class="title-bar-text">Authentication Required</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="window-body">
+                    <p>This playlist requires authentication with Spotify.</p>
+                    <button id="spotify-auth-btn">Connect to Spotify</button>
+                    <div id="auth-status" class="status-message"></div>
+                </div>
             </div>
 
             <div id="main-content" class="two-column-layout hidden">
-                <div id="youtube-urls-section" class="urls-section">
-                    <h2>Video URLs</h2>
-                    <p>These are the video URLs found for the tracks (editable):</p>
-                    <div id="search-progress" class="search-progress hidden"></div>
-                    <textarea id="youtube-urls" placeholder="Video URLs will appear here after analyzing a playlist..." rows="10"></textarea>
-                    <div class="url-actions">
-                        <button id="search-youtube-btn" disabled>Re-search Video URLs</button>
-                        <button id="save-urls-btn">Save URLs to File</button>
-                        <button id="copy-urls-btn">Copy URLs</button>
+                <div id="youtube-urls-section" class="window">
+                    <div class="title-bar">
+                        <div class="title-bar-text">Video URLs</div>
+                        <div class="title-bar-controls">
+                            <button aria-label="Minimize"></button>
+                            <button aria-label="Maximize"></button>
+                            <button aria-label="Close"></button>
+                        </div>
+                    </div>
+                    <div class="window-body">
+                        <p>These are the video URLs found for the tracks:</p>
+                        <div id="search-progress" class="search-progress hidden"></div>
+                        <textarea id="youtube-urls" placeholder="Video URLs will appear here after analyzing a playlist..." rows="10" readonly></textarea>
+                        <div class="url-actions">
+                            <button id="search-youtube-btn" disabled>Re-search Video URLs</button>
+                            <button id="save-urls-btn">Save URLs to File</button>
+                            <button id="copy-urls-btn">Copy URLs</button>
+                            <label>
+                                <input type="checkbox" id="track-info-checkbox" checked>
+                                Include track info
+                            </label>
+                        </div>
                     </div>
                 </div>
 
-                <div id="tracks-section" class="section">
-                    <h2>Tracks Found</h2>
-                    <div id="tracks-info"></div>
-                    <div id="tracks-list"></div>
-                    
-                    <div class="download-options">
-                        <h3>Download Options</h3>
-                        <label>
-                            <input type="checkbox" id="track-numbers-checkbox" checked>
-                            Include track numbers in filenames
-                        </label>
+                <div id="tracks-section" class="window">
+                    <div class="title-bar">
+                        <div class="title-bar-text">Tracks Found</div>
+                        <div class="title-bar-controls">
+                            <button aria-label="Minimize"></button>
+                            <button aria-label="Maximize"></button>
+                            <button aria-label="Close"></button>
+                        </div>
                     </div>
-                    
+                    <div class="window-body">
+                        <div id="tracks-info"></div>
+                        <div id="tracks-list"></div>
+                        
+                        <fieldset>
+                            <legend>Download Options</legend>
+                            <label>
+                                <input type="checkbox" id="track-numbers-checkbox" checked>
+                                Include track numbers in filenames
+                            </label>
+                        </fieldset>
+                        
+                        <div class="actions">
+                            <button id="download-btn">Download All Tracks</button>
+                            <button id="restart-btn">Process Another URL</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="download-section" class="window hidden">
+                <div class="title-bar">
+                    <div class="title-bar-text">Download Progress</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="window-body">
+                    <div id="download-progress"></div>
+                    <div id="download-results"></div>
                     <div class="actions">
-                        <button id="download-btn">Download All Tracks</button>
-                        <button id="restart-btn">Process Another URL</button>
+                        <button id="cancel-btn">Cancel Download</button>
                     </div>
                 </div>
             </div>
 
-            <div id="download-section" class="section hidden">
-                <h2>Download Progress</h2>
-                <div id="download-progress"></div>
-                <div id="download-results"></div>
-                <div class="actions">
-                    <button id="cancel-btn">Cancel Download</button>
+            <div id="results-section" class="window hidden">
+                <div class="title-bar">
+                    <div class="title-bar-text">Download Complete</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
                 </div>
-            </div>
-
-            <div id="results-section" class="section hidden">
-                <h2>Download Complete</h2>
-                <div id="results-summary"></div>
-                <div class="actions">
-                    <button id="new-download-btn">Process Another URL</button>
+                <div class="window-body">
+                    <div id="results-summary"></div>
+                    <div class="actions">
+                        <button id="new-download-btn">Process Another URL</button>
+                    </div>
                 </div>
             </div>
         </main>
 
         <footer>
-            <p>Playlistifier Web v1.0.0 - Built with Node.js and Vanilla JavaScript</p>
+            <p>Playlistifier Web v1.1.0</p>
         </footer>
     </div>
 

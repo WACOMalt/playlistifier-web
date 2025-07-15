@@ -120,8 +120,22 @@ router.post('/single', async (req, res) => {
     if (result.success) {
       // Set headers for file download
       const filename = result.filename;
+      
+      // Sanitize filename for HTTP headers using RFC 5987 encoding
+      const sanitizedFilename = filename
+        .replace(/[\u0080-\uFFFF]/g, (char) => {
+          // Convert Unicode characters to percent-encoded UTF-8
+          return encodeURIComponent(char);
+        })
+        .replace(/["\\]/g, '_') // Replace quotes and backslashes with underscores
+        .replace(/[\x00-\x1F\x7F]/g, '_') // Replace control characters with underscores
+        .trim();
+      
       res.setHeader('Content-Type', 'audio/mpeg');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      
+      // Use RFC 5987 encoding for better Unicode support
+      const encodedFilename = encodeURIComponent(filename);
+      res.setHeader('Content-Disposition', `attachment; filename="${sanitizedFilename}"; filename*=UTF-8''${encodedFilename}`);
       
       // Send the file
       const fs = require('fs');
@@ -129,10 +143,13 @@ router.post('/single', async (req, res) => {
       
       fileStream.pipe(res);
       
-      // Track file for session cleanup
+      // Track file and directory for session cleanup
       const sessionId = req.session.id;
       if (sessionId) {
         downloadService.trackFileForSession(sessionId, result.filePath);
+        // Also track the temporary directory
+        const tempDir = path.dirname(result.filePath);
+        downloadService.trackDirectoryForSession(sessionId, tempDir);
       }
       
       // Clean up after sending

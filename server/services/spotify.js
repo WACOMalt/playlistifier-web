@@ -105,7 +105,8 @@ class SpotifyService {
                 ...track,
                 album: {
                     name: album.name,
-                    images: album.images
+                    images: album.images,
+                    release_date: album.release_date
                 }
             }));
             
@@ -139,11 +140,21 @@ class SpotifyService {
     }
 
     formatTrack(track) {
+        // Extract release year from album release date
+        let releaseYear = null;
+        if (track.album?.release_date) {
+            const releaseDate = new Date(track.album.release_date);
+            if (!isNaN(releaseDate.getTime())) {
+                releaseYear = releaseDate.getFullYear();
+            }
+        }
+        
         return {
             id: track.id,
             title: track.name,
             artist: track.artists?.map(artist => artist.name).join(', ') || 'Unknown Artist',
             album: track.album?.name || 'Unknown Album',
+            release_year: releaseYear,
             duration_ms: track.duration_ms,
             duration: this.formatDuration(track.duration_ms),
             explicit: track.explicit,

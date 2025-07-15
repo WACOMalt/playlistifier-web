@@ -103,9 +103,16 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`Playlistifier Web Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Initialize download service and clean up any leftover temp files
+  try {
+    await require('./services/downloader').initialize();
+  } catch (error) {
+    console.error('Failed to initialize download service:', error);
+  }
 });
 
 module.exports = app;

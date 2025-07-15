@@ -6,6 +6,8 @@ class PlaylistifierApp {
         this.currentUrl = '';
         this.currentTracks = [];
         this.authToken = null;
+        this.rawUrlData = []; // Store raw URL data separately from display
+        this.currentHeader = ''; // Store the header separately
         
         this.initializeApp();
     }
@@ -27,7 +29,7 @@ class PlaylistifierApp {
         document.getElementById('spotify-auth-btn').addEventListener('click', () => this.authenticatePlatform());
 
         // Downloads
-        document.getElementById('download-btn').addEventListener('click', () => this.startDownload());
+document.getElementById('download-btn').addEventListener('click', () => this.saveAllTracks());
         document.getElementById('cancel-btn').addEventListener('click', () => this.cancelDownload());
 
         // Navigation
@@ -38,6 +40,7 @@ class PlaylistifierApp {
         document.getElementById('search-youtube-btn').addEventListener('click', () => this.searchVideoUrls());
         document.getElementById('save-urls-btn').addEventListener('click', () => this.saveUrlsToFile());
         document.getElementById('copy-urls-btn').addEventListener('click', () => this.copyUrlsToClipboard());
+        document.getElementById('track-info-checkbox').addEventListener('change', () => this.toggleTrackInfo());
     }
 
     setupWebSocket() {
@@ -250,7 +253,62 @@ class PlaylistifierApp {
         }
     }
 
-    async startDownload() {
+async saveAllTracks() {
+        if (!this.currentTracks.length) {
+            this.showError('No tracks to download');
+            return;
+        }
+
+        const tracksToDownload = [];
+        for (let i = 0; i < this.currentTracks.length; i++) {
+            if (!this.downloadedTracks.has(String(i))) {
+                tracksToDownload.push({ track: this.currentTracks[i], index: i });
+            }
+        }
+
+        if (tracksToDownload.length === 0) {
+            // All tracks are already downloaded, just create the zip
+            if (this.downloadedBlobs && this.downloadedBlobs.size > 0) {
+                await this.downloadAllAsZip();
+            } else {
+                this.showError('No tracks available to save');
+            }
+            return;
+        }
+
+        // Show download progress and start downloads
+        const downloadAllBtn = document.getElementById('download-btn');
+        downloadAllBtn.disabled = true;
+        downloadAllBtn.textContent = 'Downloading...';
+
+        try {
+            await this.downloadTracksWithConcurrency(tracksToDownload, 3);
+            
+            // Update button text after all downloads complete
+            this.updateDownloadAllButton();
+            this.showStatus('All tracks downloaded successfully! Click "Save All as ZIP" to download the complete playlist.');
+        } catch (error) {
+            this.showError(error.message);
+        } finally {
+            downloadAllBtn.disabled = false;
+        }
+    }
+
+    toggleTrackInfo() {
+        const checkbox = document.getElementById('track-info-checkbox');
+        const youtubeUrlsTextarea = document.getElementById('youtube-urls');
+        
+        if (checkbox.checked) {
+            // Show header + track info + URLs
+            youtubeUrlsTextarea.value = this.currentHeader + this.rawUrlData.join('\n');
+        } else {
+            // Show only URLs (no header, no track info)
+            const urlsOnly = this.rawUrlData.filter((line, index) => index % 2 !== 0);
+            youtubeUrlsTextarea.value = urlsOnly.join('\n');
+        }
+    }
+
+    async createPlaylistZip() {
         if (!this.currentTracks.length) {
             this.showError('No tracks to download');
             return;
@@ -381,13 +439,55 @@ class PlaylistifierApp {
         const zip = new JSZip();
         console.log('JSZip instance created');
         
-        // Add all downloaded files to the zip
-        console.log('Adding files to zip:');
+        // Calculate padding for track numbers
+        const totalTracks = this.currentTracks.length;
+        const padding = Math.max(2, totalTracks.toString().length);
+        
+        // Create a map to store tracks with their indices for proper ordering
+        const trackMap = new Map();
         for (const [trackId, downloadData] of this.downloadedBlobs) {
-            console.log(`- ${trackId}: ${downloadData.filename}`);
-            console.log(`  Blob size: ${downloadData.blob.size} bytes`);
-            zip.file(downloadData.filename, downloadData.blob);
+            const trackIndex = parseInt(trackId);
+            trackMap.set(trackIndex, downloadData);
         }
+        
+        // Sort tracks by index and add to zip with proper numbering
+        const sortedTrackIndices = Array.from(trackMap.keys()).sort((a, b) => a - b);
+        
+        console.log('Adding files to zip with track numbers:');
+sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
+            const downloadData = trackMap.get(trackIndex);
+            const includeTrackNumbers = document.getElementById('track-numbers-checkbox').checked;
+            const trackNumber = String(sequentialIndex + 1).padStart(padding, '0');
+            
+            // Create new filename
+            const sanitizeFilename = (str) => {
+                return str.replace(/[<>:"/\\|*?]/g, '_').replace(/\s+/g, ' ').trim();
+            };
+            
+            const track = downloadData.track;
+            const artist = sanitizeFilename(track.artist || 'Unknown Artist');
+            const title = sanitizeFilename(track.title || 'Unknown Title');
+            const filename = includeTrackNumbers ? `${trackNumber} - ${artist} - ${title}.mp3` : `${artist} - ${title}.mp3`;
+            
+            console.log(`- ${trackIndex}: ${filename}`);
+            console.log(`  Blob size: ${downloadData.blob.size} bytes`);
+            zip.file(filename, downloadData.blob);
+        });
+        
+        // Add playlist file with YouTube URLs
+        const playlistName = this.currentMetadata?.name || this.currentMetadata?.title || 'Playlist';
+        const sanitizedPlaylistName = playlistName.replace(/[<>:"/\\|*?]/g, '_');
+        const playlistFilename = `${sanitizedPlaylistName} - songs.txt`;
+        
+        // Get YouTube URLs content
+        const youtubeUrlsTextarea = document.getElementById('youtube-urls');
+        const youtubeUrlsContent = youtubeUrlsTextarea ? youtubeUrlsTextarea.value : '';
+        
+        if (youtubeUrlsContent.trim()) {
+            console.log(`Adding playlist file: ${playlistFilename}`);
+            zip.file(playlistFilename, youtubeUrlsContent);
+        }
+        
         console.log('All files added to zip');
 
         try {
@@ -396,9 +496,7 @@ class PlaylistifierApp {
             const zipBlob = await zip.generateAsync({type: 'blob'});
             
             // Create filename from playlist/album title
-            const playlistName = this.currentMetadata?.name || this.currentMetadata?.title || 'Playlist';
-            // Clean filename by removing invalid characters
-            const cleanName = playlistName.replace(/[\<\>:"/\\|?*]/g, '-');
+            const cleanName = sanitizedPlaylistName;
             const zipFilename = `${cleanName}.zip`;
             
             console.log(`Downloading zip file: ${zipFilename}`);
@@ -443,6 +541,7 @@ class PlaylistifierApp {
         this.updateTrackStatus(trackId, 'downloading', 'Downloading...');
 
         try {
+            // Always download individual tracks without numbering
             const response = await fetch('/api/download/single', {
                 method: 'POST',
                 headers: {
@@ -469,9 +568,31 @@ class PlaylistifierApp {
                 this.downloadedBlobs = new Map();
             }
             
+            // Extract actual filename from Content-Disposition header
+            let actualFilename = `${track.artist} - ${track.title}.mp3`; // fallback
+            const contentDisposition = response.headers.get('Content-Disposition');
+            if (contentDisposition) {
+                // Try to extract filename from Content-Disposition header
+                const filenameMatch = contentDisposition.match(/filename\*?=([^;]+)/);
+                if (filenameMatch) {
+                    let headerFilename = filenameMatch[1].trim();
+                    // Remove quotes if present
+                    if (headerFilename.startsWith('"') && headerFilename.endsWith('"')) {
+                        headerFilename = headerFilename.slice(1, -1);
+                    }
+                    // Handle RFC 5987 encoding (filename*=UTF-8''encoded-filename)
+                    if (headerFilename.startsWith('UTF-8\'\'\'')) {
+                        headerFilename = decodeURIComponent(headerFilename.substring(7));
+                    }
+                    actualFilename = headerFilename;
+                }
+            }
+            
+            console.log(`Storing blob for track ${trackId} with filename: ${actualFilename}`);
+            
             this.downloadedBlobs.set(trackId, {
                 blob: blob,
-                filename: `${track.artist} - ${track.title}.mp3`,
+                filename: actualFilename,
                 track: track
             });
             
@@ -519,7 +640,7 @@ class PlaylistifierApp {
         const remainingCount = totalTracks - downloadedCount;
         
         if (remainingCount > 0) {
-            downloadAllBtn.textContent = `Save Remaining (${remainingCount})`;
+            downloadAllBtn.textContent = `Download Remaining (${remainingCount})`;
         } else {
             downloadAllBtn.textContent = 'Save All as ZIP';
             downloadAllBtn.disabled = false; // Enable button to save zip
@@ -722,14 +843,22 @@ class PlaylistifierApp {
 
 `;
         
-        // Generate URLs based on platform
-        let urls = [];
+        // Store header for toggle functionality
+        this.currentHeader = header;
+        this.rawUrlData = [];
         
+        // Generate formatted track list based on platform
         if (metadata.platform === 'youtube') {
-            // For YouTube, use direct URLs
-            urls = tracks.map(track => track.url).filter(url => url);
-            const fullText = header + urls.join('\n');
-            youtubeUrlsTextarea.value = fullText;
+            // For YouTube, use direct URLs with track numbers
+            tracks.forEach((track, index) => {
+                const trackNumber = String(index + 1).padStart(2, '0');
+                const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
+                const url = track.url || '# URL not found';
+                this.rawUrlData.push(trackTitle, url);
+            });
+            
+            // Update textarea based on checkbox state
+            this.toggleTrackInfo();
         } else {
             // For Spotify, automatically search for YouTube URLs with real-time updates
             await this.performRealTimeVideoSearch(tracks, header);
@@ -825,6 +954,10 @@ async performRealTimeVideoSearch(tracks, header) {
         let found = 0;
         let failed = 0;
         
+        // Store header and initialize raw data
+        this.currentHeader = header;
+        this.rawUrlData = [];
+        
         try {
             // Search for each track individually to show real-time updates
             for (let i = 0; i < tracks.length; i++) {
@@ -851,8 +984,11 @@ async performRealTimeVideoSearch(tracks, header) {
                     
                     if (response.ok && data.results && data.results.length > 0) {
                         const result = data.results[0];
+                        const trackNumber = String(i + 1).padStart(2, '0');
+                        const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
+                        
                         if (result.found && result.url) {
-                            results.push(result.url);
+                            this.rawUrlData.push(trackTitle, result.url);
                             found++;
                             progressDiv.innerHTML += `✓ Found: ${result.url}\n`;
                             // Update track status to "Found"
@@ -860,16 +996,16 @@ async performRealTimeVideoSearch(tracks, header) {
                             // Update the track object with the found URL
                             this.currentTracks[i].url = result.url;
                         } else {
-                            const notFoundEntry = `# Not found: ${track.artist} - ${track.title}`;
-                            results.push(notFoundEntry);
+                            this.rawUrlData.push(trackTitle, '# Not found');
                             failed++;
                             progressDiv.innerHTML += `✗ Not found: ${query}\n`;
                             // Update track status to "Not Found"
                             this.updateTrackStatus(i, 'not-found', 'Not Found');
                         }
                     } else {
-                        const notFoundEntry = `# Not found: ${track.artist} - ${track.title}`;
-                        results.push(notFoundEntry);
+                        const trackNumber = String(i + 1).padStart(2, '0');
+                        const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
+                        this.rawUrlData.push(trackTitle, '# Not found');
                         failed++;
                         progressDiv.innerHTML += `✗ Search failed: ${query}\n`;
                         // Update track status to "Not Found"
@@ -877,17 +1013,17 @@ async performRealTimeVideoSearch(tracks, header) {
                     }
                 } catch (error) {
                     console.error(`Search failed for track ${i}:`, error);
-                    const notFoundEntry = `# Error: ${track.artist} - ${track.title}`;
-                    results.push(notFoundEntry);
+                    const trackNumber = String(i + 1).padStart(2, '0');
+                    const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
+                    this.rawUrlData.push(trackTitle, '# Error');
                     failed++;
                     progressDiv.innerHTML += `✗ Error: ${query} - ${error.message}\n`;
                     // Update track status to "Error"
                     this.updateTrackStatus(i, 'error', 'Error');
                 }
                 
-                // Update the textarea with current results
-                const currentText = header + results.join('\n');
-                youtubeUrlsTextarea.value = currentText;
+                // Update the textarea with current results based on checkbox state
+                this.toggleTrackInfo();
                 
                 // Scroll to bottom of textarea
                 youtubeUrlsTextarea.scrollTop = youtubeUrlsTextarea.scrollHeight;

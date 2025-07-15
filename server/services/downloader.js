@@ -165,32 +165,76 @@ class DownloadService {
     }
 
     async downloadFromSearch(track, outputPath, socketIo, downloadId, trackIndex = null, options = {}) {
+        console.log(`downloadFromSearch: ENTRY - Starting download for ${track.artist} - ${track.title}`);
+        
         // Search for the track on YouTube
         const searchQuery = `${track.artist} ${track.title}`;
         
         try {
+            console.log(`downloadFromSearch: Setting up tools...`);
             // Ensure setup is complete
             await setupManager.setup();
+            console.log(`downloadFromSearch: Setup complete`);
             
-            // Generate the expected filename
+            // Generate the expected filename using Spotify metadata
             const expectedFilename = this.generateFilename(track, trackIndex, options);
             const outputTemplate = path.join(outputPath, expectedFilename);
             
-            // Use yt-dlp to search and download
+            console.log(`downloadFromSearch: Searching for ${searchQuery}`);
+            console.log(`downloadFromSearch: Expected filename: ${expectedFilename}`);
+            console.log(`downloadFromSearch: Output template: ${outputTemplate}`);
+            console.log(`downloadFromSearch: Output path: ${outputPath}`);
+            
+            // Use yt-dlp to search and download with a temporary filename first
+            const tempFilename = `temp_${Date.now()}.%(ext)s`;
+            const tempOutputTemplate = path.join(outputPath, tempFilename);
+            
+            // If the track already has a URL, use it directly; otherwise, search
+            const downloadTarget = track.url || `ytsearch1:${searchQuery}`;
+            
             const args = [
                 '--extract-audio',
                 '--audio-format', 'mp3',
                 '--audio-quality', '0',
-                '--output', outputTemplate,
+                '--output', tempOutputTemplate,
                 '--no-warnings',
                 '--no-playlist',
-                `ytsearch1:${searchQuery}`
+                downloadTarget
             ];
 
-            console.log(`Downloading ${searchQuery} to ${outputTemplate}`);
-            await this.runCommand('yt-dlp', args);
+            console.log(`downloadFromSearch: About to run yt-dlp with args:`, args);
+            console.log(`downloadFromSearch: Downloading ${downloadTarget} to temporary file`);
+            
+            try {
+                await this.runCommand('yt-dlp', args);
+                console.log(`downloadFromSearch: yt-dlp command completed successfully`);
+            } catch (ytdlpError) {
+                console.error(`downloadFromSearch: yt-dlp command failed:`, ytdlpError);
+                throw ytdlpError;
+            }
+            
+            // Find the downloaded temporary file
+            console.log(`downloadFromSearch: Reading directory ${outputPath}`);
+            const files = await fs.readdir(outputPath);
+            console.log(`downloadFromSearch: Files in directory after download:`, files);
+            const tempFile = files.find(f => f.startsWith('temp_') && f.endsWith('.mp3'));
+            
+            if (tempFile) {
+                const tempFilePath = path.join(outputPath, tempFile);
+                console.log(`downloadFromSearch: Found temp file: ${tempFile}`);
+                console.log(`downloadFromSearch: Temp file path: ${tempFilePath}`);
+                console.log(`downloadFromSearch: Target path: ${outputTemplate}`);
+                
+                // Rename to the expected filename with Spotify metadata
+                await fs.rename(tempFilePath, outputTemplate);
+                console.log(`downloadFromSearch: Successfully renamed temp file to: ${expectedFilename}`);
+            } else {
+                console.error(`downloadFromSearch: No temp file found in:`, files);
+                throw new Error('Downloaded file not found');
+            }
             
         } catch (error) {
+            console.error(`downloadFromSearch: Error downloading ${track.title}:`, error);
             throw new Error(`Failed to download ${track.title}: ${error.message}`);
         }
     }
@@ -239,6 +283,11 @@ class DownloadService {
                 '-metadata', `album=${track.album || 'Unknown Album'}`,
                 tempFile
             ];
+            
+            // Add release year if available
+            if (track.release_year) {
+                args.splice(-1, 0, '-metadata', `date=${track.release_year}`);
+            }
         } else {
             args = [
                 '-i', filepath,
@@ -248,6 +297,11 @@ class DownloadService {
                 '-codec', 'copy',
                 tempFile
             ];
+            
+            // Add release year if available
+            if (track.release_year) {
+                args.splice(-1, 0, '-metadata', `date=${track.release_year}`);
+            }
         }
 
         try {
@@ -320,6 +374,11 @@ class DownloadService {
                 '-metadata', `album=${track.album || 'Unknown Album'}`,
                 tempFile
             ];
+            
+            // Add release year if available
+            if (track.release_year) {
+                args.splice(-1, 0, '-metadata', `date=${track.release_year}`);
+            }
         } else {
             args = [
                 '-i', filePath,
@@ -329,6 +388,11 @@ class DownloadService {
                 '-codec', 'copy',
                 tempFile
             ];
+            
+            // Add release year if available
+            if (track.release_year) {
+                args.splice(-1, 0, '-metadata', `date=${track.release_year}`);
+            }
         }
         
         try {
@@ -356,18 +420,24 @@ class DownloadService {
     }
 
     generateFilename(track, trackIndex = null, options = {}) {
-        // Sanitize filename
+        // Sanitize filename - remove problematic characters including ? for Windows compatibility
         const sanitize = (str) => {
-            return str.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, ' ').trim();
+            return str.replace(/[<>:"/\\|*?]/g, '_').replace(/\s+/g, ' ').trim();
         };
         
+        // For Spotify tracks, use the original Spotify metadata for filename
+        // For YouTube tracks, use the track data as is
         const artist = sanitize(track.artist || 'Unknown Artist');
         const title = sanitize(track.title || 'Unknown Title');
         
+        // Calculate padding for track numbers based on total tracks
+        const totalTracks = options.totalTracks || 100;
+        const padding = Math.max(2, totalTracks.toString().length);
+        
         // Add track number if requested
         if (options.includeTrackNumbers && trackIndex !== null) {
-            const trackNumber = String(trackIndex + 1).padStart(2, '0');
-            return `${trackNumber}. ${artist} - ${title}.mp3`;
+            const trackNumber = String(trackIndex + 1).padStart(padding, '0');
+            return `${trackNumber} - ${artist} - ${title}.mp3`;
         }
         
         return `${artist} - ${title}.mp3`;
@@ -512,39 +582,33 @@ class DownloadService {
             download.downloadPath = tempDir;
             
             // Download the track
-            if (download.track.url) {
-                // Direct YouTube URL
-                await this.downloadFromYouTube(download.track, download.downloadPath, () => {});
-            } else {
-                // Search and download from YouTube
+            // For single track downloads, always use downloadFromSearch to ensure proper filename handling
+            // even if the track has a URL (which would normally use downloadFromYouTube)
+            console.log(`downloadSingleTrack: About to call downloadFromSearch for ${download.track.artist} - ${download.track.title}`);
+            console.log(`downloadSingleTrack: Track has URL: ${!!download.track.url}`);
+            console.log(`downloadSingleTrack: Track object:`, download.track);
+            try {
                 await this.downloadFromSearch(download.track, download.downloadPath, socketIo, downloadId, download.trackId, download.options);
+                console.log(`downloadSingleTrack: downloadFromSearch completed successfully`);
+            } catch (downloadError) {
+                console.error(`downloadSingleTrack: downloadFromSearch failed:`, downloadError);
+                throw downloadError;
             }
             
-            // First, determine the actual filename that was downloaded
+            // Generate the expected filename using Spotify metadata
             download.filename = this.generateFilename(download.track, download.trackId, download.options);
             download.filePath = path.join(download.downloadPath, download.filename);
             
-            // Debug: List all files in the directory
-            let actualFilename = null;
-            try {
-                const files = await fs.readdir(download.downloadPath);
-                console.log(`Files in download directory ${download.downloadPath}:`, files);
-                console.log(`Looking for file: ${download.filename}`);
-                
-                // Find the actual MP3 file (yt-dlp might add extra text to the filename)
-                const mp3Files = files.filter(f => f.endsWith('.mp3'));
-                if (mp3Files.length > 0) {
-                    actualFilename = mp3Files[0]; // Use the first (and likely only) MP3 file
-                    console.log(`Found actual file: ${actualFilename}`);
-                }
-            } catch (error) {
-                console.error('Error listing directory:', error);
-            }
+            console.log(`Expected filename: ${download.filename}`);
+            console.log(`Expected file path: ${download.filePath}`);
             
-            // Use the actual filename if found, otherwise use the expected filename
-            if (actualFilename) {
-                download.filename = actualFilename;
-                download.filePath = path.join(download.downloadPath, actualFilename);
+            // The file should already be renamed by downloadFromSearch, so check if it exists
+            try {
+                await fs.access(download.filePath);
+                console.log(`File exists at expected path: ${download.filePath}`);
+            } catch (error) {
+                console.error(`File not found at expected path: ${download.filePath}`);
+                throw new Error('Downloaded file not found at expected location');
             }
             
             // Now add metadata to the correct file
@@ -601,6 +665,15 @@ class DownloadService {
         console.log(`Tracking file for session ${sessionId}: ${filePath}`);
     }
 
+    // Track a directory for a session
+    trackDirectoryForSession(sessionId, dirPath) {
+        if (!this.sessionFiles.has(sessionId)) {
+            this.sessionFiles.set(sessionId, new Set());
+        }
+        this.sessionFiles.get(sessionId).add(dirPath);
+        console.log(`Tracking directory for session ${sessionId}: ${dirPath}`);
+    }
+
     // Clean up all files for a session (instant deletion, no recycle bin)
     async cleanupSessionFiles(sessionId) {
         const sessionFiles = this.sessionFiles.get(sessionId);
@@ -608,41 +681,98 @@ class DownloadService {
             return;
         }
 
-        console.log(`Cleaning up ${sessionFiles.size} files for session ${sessionId}`);
+        console.log(`Cleaning up ${sessionFiles.size} files/directories for session ${sessionId}`);
         
-        for (const filePath of sessionFiles) {
-            try {
-                await fs.access(filePath);
-                await fs.unlink(filePath); // Direct deletion, bypasses recycle bin
-                console.log(`Deleted file: ${filePath}`);
-            } catch (error) {
-                console.log(`File already deleted or not found: ${filePath}`);
-            }
-        }
-
-        // Also clean up directories if they're empty
+        // First, clean up all files
         const directories = new Set();
         for (const filePath of sessionFiles) {
-            const dir = path.dirname(filePath);
-            if (dir.includes('temp') || dir.includes('download-')) {
-                directories.add(dir);
+            try {
+                const stats = await fs.stat(filePath);
+                if (stats.isFile()) {
+                    await fs.unlink(filePath);
+                    console.log(`Deleted file: ${filePath}`);
+                    // Add parent directory to cleanup list
+                    const parentDir = path.dirname(filePath);
+                    if (parentDir.includes('temp') || parentDir.includes('download-')) {
+                        directories.add(parentDir);
+                    }
+                } else if (stats.isDirectory()) {
+                    directories.add(filePath);
+                }
+            } catch (error) {
+                if (error.code === 'ENOENT') {
+                    console.log(`File/directory already deleted: ${filePath}`);
+                } else {
+                    console.log(`Error handling ${filePath}: ${error.message}`);
+                }
+                // Still try to add to directories if it looks like a temp directory
+                if (filePath.includes('temp') || filePath.includes('download-')) {
+                    directories.add(filePath);
+                }
             }
         }
 
-        for (const dir of directories) {
-            try {
-                const files = await fs.readdir(dir);
-                if (files.length === 0) {
-                    await fs.rm(dir, { recursive: true, force: true });
-                    console.log(`Deleted empty directory: ${dir}`);
-                }
-            } catch (error) {
-                console.log(`Directory cleanup failed: ${dir}`);
-            }
-        }
+        // Now clean up directories - use a more robust approach
+        await this.cleanupDirectories(directories);
 
         this.sessionFiles.delete(sessionId);
         console.log(`Session ${sessionId} cleanup completed`);
+    }
+
+    // Helper method to clean up directories with better error handling
+    async cleanupDirectories(directories) {
+        for (const dir of directories) {
+            try {
+                // First check if directory exists
+                await fs.access(dir);
+                
+                // Try to remove it recursively
+                await fs.rm(dir, { recursive: true, force: true });
+                console.log(`Deleted directory: ${dir}`);
+            } catch (error) {
+                if (error.code === 'ENOENT') {
+                    console.log(`Directory already deleted: ${dir}`);
+                } else {
+                    console.log(`Directory cleanup failed: ${dir} - ${error.message}`);
+                    
+                    // If direct deletion fails, try to find and clean similar directories
+                    await this.cleanupSimilarDirectories(dir);
+                }
+            }
+        }
+    }
+
+    // Helper method to find and clean up directories with similar names
+    async cleanupSimilarDirectories(targetDir) {
+        try {
+            const parentDir = path.dirname(targetDir);
+            const targetName = path.basename(targetDir);
+            
+            // Only proceed if it's a temp directory
+            if (!targetName.startsWith('single-')) {
+                return;
+            }
+            
+            const files = await fs.readdir(parentDir);
+            
+            // Look for directories that match the pattern but might have slight differences
+            const pattern = targetName.split('-').slice(0, 2).join('-'); // e.g., "single-1752586605612"
+            
+            for (const file of files) {
+                const filePath = path.join(parentDir, file);
+                try {
+                    const stats = await fs.stat(filePath);
+                    if (stats.isDirectory() && file.startsWith(pattern)) {
+                        await fs.rm(filePath, { recursive: true, force: true });
+                        console.log(`Cleaned up similar directory: ${filePath}`);
+                    }
+                } catch (cleanupError) {
+                    console.log(`Failed to clean similar directory ${filePath}: ${cleanupError.message}`);
+                }
+            }
+        } catch (error) {
+            console.log(`Error during similar directory cleanup: ${error.message}`);
+        }
     }
 
     // Clean up all temporary files and directories
@@ -652,18 +782,33 @@ class DownloadService {
             await fs.access(tempPath);
             const tempDirs = await fs.readdir(tempPath);
             
+            console.log(`Found ${tempDirs.length} temporary directories to clean up`);
+            
             for (const dir of tempDirs) {
                 const dirPath = path.join(tempPath, dir);
                 try {
                     await fs.rm(dirPath, { recursive: true, force: true });
                     console.log(`Cleaned up temp directory: ${dirPath}`);
                 } catch (error) {
-                    console.log(`Failed to clean temp directory: ${dirPath}`);
+                    console.log(`Failed to clean temp directory: ${dirPath} - ${error.message}`);
                 }
             }
+            
+            console.log('Temporary directory cleanup completed');
         } catch (error) {
-            console.log('No temp directory to clean up');
+            if (error.code === 'ENOENT') {
+                console.log('No temp directory exists to clean up');
+            } else {
+                console.log(`Error during temp cleanup: ${error.message}`);
+            }
         }
+    }
+    
+    // Initialize the service and clean up any leftover temp files
+    async initialize() {
+        console.log('Initializing download service...');
+        await this.cleanupAllTempFiles();
+        console.log('Download service initialized');
     }
 }
 
