@@ -103,6 +103,56 @@ router.get('/zip/:downloadId', (req, res) => {
     res.download(zipPath, 'playlist.zip');
 });
 
+// Single track download endpoint
+router.post('/single', async (req, res) => {
+  try {
+    const { track, trackId, options } = req.body;
+    if (!track || trackId === undefined) {
+      return res.status(400).json({ error: 'Track and trackId are required' });
+    }
+
+    const downloadId = await downloadService.createSingleDownload(track, trackId, options);
+    
+    // Start single track download
+    const io = req.app.get('io');
+    const result = await downloadService.downloadSingleTrack(downloadId, io);
+    
+    if (result.success) {
+      // Set headers for file download
+      const filename = result.filename;
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      
+      // Send the file
+      const fs = require('fs');
+      const fileStream = fs.createReadStream(result.filePath);
+      
+      fileStream.pipe(res);
+      
+      // Clean up after sending
+      fileStream.on('end', () => {
+        setTimeout(() => {
+          downloadService.cleanupSingleDownload(downloadId);
+        }, 1000);
+      });
+      
+      fileStream.on('error', (err) => {
+        console.error('File stream error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to stream file' });
+        }
+      });
+    } else {
+      res.status(500).json({ error: result.error || 'Download failed' });
+    }
+  } catch (error) {
+    console.error('Single track download error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to download track' });
+    }
+  }
+});
+
 // Initiate download process
 router.post('/', async (req, res) => {
   try {

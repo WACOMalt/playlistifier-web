@@ -31,34 +31,36 @@
                 <div id="auth-status" class="status-message"></div>
             </div>
 
-            <div id="tracks-section" class="section hidden">
-                <h2>Tracks Found</h2>
-                <div id="tracks-info"></div>
-                <div id="tracks-list"></div>
-                
+            <div id="main-content" class="two-column-layout hidden">
                 <div id="youtube-urls-section" class="urls-section">
-                    <h3>YouTube URLs</h3>
+                    <h2>YouTube URLs</h2>
                     <p>These are the YouTube URLs found for the tracks (editable):</p>
-                    <textarea id="youtube-urls" placeholder="YouTube URLs will appear here..." rows="10"></textarea>
+                    <div id="search-progress" class="search-progress hidden"></div>
+                    <textarea id="youtube-urls" placeholder="YouTube URLs will appear here after analyzing a playlist..." rows="10"></textarea>
                     <div class="url-actions">
-                        <button id="search-youtube-btn">Re-search YouTube URLs</button>
+                        <button id="search-youtube-btn" disabled>Re-search YouTube URLs</button>
                         <button id="save-urls-btn">Save URLs to File</button>
                         <button id="copy-urls-btn">Copy URLs</button>
                     </div>
-                    <div id="search-progress" class="search-progress hidden"></div>
                 </div>
-                
-                <div class="download-options">
-                    <h3>Download Options</h3>
-                    <label>
-                        <input type="checkbox" id="track-numbers-checkbox" checked>
-                        Include track numbers in filenames
-                    </label>
-                </div>
-                
-                <div class="actions">
-                    <button id="download-btn">Download All Tracks</button>
-                    <button id="restart-btn">Process Another URL</button>
+
+                <div id="tracks-section" class="section">
+                    <h2>Tracks Found</h2>
+                    <div id="tracks-info"></div>
+                    <div id="tracks-list"></div>
+                    
+                    <div class="download-options">
+                        <h3>Download Options</h3>
+                        <label>
+                            <input type="checkbox" id="track-numbers-checkbox" checked>
+                            Include track numbers in filenames
+                        </label>
+                    </div>
+                    
+                    <div class="actions">
+                        <button id="download-btn">Download All Tracks</button>
+                        <button id="restart-btn">Process Another URL</button>
+                    </div>
                 </div>
             </div>
 
@@ -86,6 +88,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="libs/jszip.min.js"></script>
     <script src="src/app.js"></script>
 </body>
 </html>

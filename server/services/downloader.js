@@ -170,16 +170,22 @@ class DownloadService {
             // Ensure setup is complete
             await setupManager.setup();
             
+            // Generate the expected filename
+            const expectedFilename = this.generateFilename(track, trackIndex, options);
+            const outputTemplate = path.join(outputPath, expectedFilename);
+            
             // Use yt-dlp to search and download
             const args = [
                 '--extract-audio',
                 '--audio-format', 'mp3',
                 '--audio-quality', '0',
-                '--output', path.join(outputPath, this.generateFilename(track, trackIndex, options)),
+                '--output', outputTemplate,
                 '--no-warnings',
-                `ytsearch:${searchQuery}`
+                '--no-playlist',
+                `ytsearch1:${searchQuery}`
             ];
 
+            console.log(`Downloading ${searchQuery} to ${outputTemplate}`);
             await this.runCommand('yt-dlp', args);
             
         } catch (error) {
@@ -250,6 +256,88 @@ class DownloadService {
             
         } catch (error) {
             console.warn(`Failed to add metadata to ${filename}:`, error.message);
+            
+            // Clean up temp file if it exists
+            try {
+                await fs.unlink(tempFile);
+            } catch {}
+        }
+        
+        // Clean up album art file if it exists
+        if (imagePath) {
+            try {
+                await fs.unlink(imagePath);
+            } catch {}
+        }
+    }
+    
+    async addMetadataToFile(track, filePath, trackIndex = null, options = {}) {
+        // Check if file exists
+        try {
+            await fs.access(filePath);
+        } catch {
+            console.warn(`File not found for metadata processing: ${filePath}`);
+            return; // File doesn't exist, skip metadata
+        }
+        
+        console.log(`Adding metadata to file: ${filePath}`);
+        
+        // Get directory for temporary files
+        const outputDir = path.dirname(filePath);
+        
+        // Download and embed album art
+        const imageUrl = track.images && track.images.length > 0 ? track.images[0].url : null;
+        let imagePath = null;
+        if (imageUrl) {
+            const imageFileName = `album_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+            imagePath = path.join(outputDir, imageFileName);
+            
+            try {
+                const imageResponse = await fetch(imageUrl);
+                const buffer = await imageResponse.buffer();
+                await fs.writeFile(imagePath, buffer);
+            } catch (error) {
+                console.warn(`Failed to download album art for ${track.title}:`, error.message);
+                imagePath = null;
+            }
+        }
+        
+        const tempFile = filePath.replace('.mp3', '_temp.mp3');
+        let args;
+        
+        if (imagePath) {
+            args = [
+                '-i', filePath,
+                '-i', imagePath,
+                '-map', '0',
+                '-map', '1',
+                '-c', 'copy',
+                '-disposition:v', 'attached_pic',
+                '-metadata', `title=${track.title}`,
+                '-metadata', `artist=${track.artist}`,
+                '-metadata', `album=${track.album || 'Unknown Album'}`,
+                tempFile
+            ];
+        } else {
+            args = [
+                '-i', filePath,
+                '-metadata', `title=${track.title}`,
+                '-metadata', `artist=${track.artist}`,
+                '-metadata', `album=${track.album || 'Unknown Album'}`,
+                '-codec', 'copy',
+                tempFile
+            ];
+        }
+        
+        try {
+            await this.runCommand('ffmpeg', args);
+            
+            // Replace original file with metadata-enriched version
+            await fs.rename(tempFile, filePath);
+            console.log(`Metadata successfully added to: ${filePath}`);
+            
+        } catch (error) {
+            console.warn(`Failed to add metadata to ${filePath}:`, error.message);
             
             // Clean up temp file if it exists
             try {
@@ -379,6 +467,116 @@ class DownloadService {
             return true;
         }
         return false;
+    }
+
+    async createSingleDownload(track, trackId, options = {}) {
+        const downloadId = `single-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        const download = {
+            id: downloadId,
+            track: track,
+            trackId: trackId,
+            options: {
+                format: 'mp3',
+                quality: 'best',
+                includeTrackNumbers: false,
+                ...options
+            },
+            status: 'pending',
+            startTime: new Date(),
+            downloadPath: null,
+            filename: null,
+            filePath: null
+        };
+
+        this.downloads.set(downloadId, download);
+        return downloadId;
+    }
+
+    async downloadSingleTrack(downloadId, socketIo) {
+        const download = this.downloads.get(downloadId);
+        if (!download) {
+            return { success: false, error: 'Download not found' };
+        }
+
+        console.log(`Starting single track download ${downloadId}: ${download.track.artist} - ${download.track.title}`);
+        
+        download.status = 'downloading';
+        
+        try {
+            // Create temporary download directory
+            const tempDir = path.join(this.defaultDownloadPath, 'temp', downloadId);
+            await fs.mkdir(tempDir, { recursive: true });
+            download.downloadPath = tempDir;
+            
+            // Download the track
+            if (download.track.url) {
+                // Direct YouTube URL
+                await this.downloadFromYouTube(download.track, download.downloadPath, () => {});
+            } else {
+                // Search and download from YouTube
+                await this.downloadFromSearch(download.track, download.downloadPath, socketIo, downloadId, download.trackId, download.options);
+            }
+            
+            // First, determine the actual filename that was downloaded
+            download.filename = this.generateFilename(download.track, download.trackId, download.options);
+            download.filePath = path.join(download.downloadPath, download.filename);
+            
+            // Debug: List all files in the directory
+            let actualFilename = null;
+            try {
+                const files = await fs.readdir(download.downloadPath);
+                console.log(`Files in download directory ${download.downloadPath}:`, files);
+                console.log(`Looking for file: ${download.filename}`);
+                
+                // Find the actual MP3 file (yt-dlp might add extra text to the filename)
+                const mp3Files = files.filter(f => f.endsWith('.mp3'));
+                if (mp3Files.length > 0) {
+                    actualFilename = mp3Files[0]; // Use the first (and likely only) MP3 file
+                    console.log(`Found actual file: ${actualFilename}`);
+                }
+            } catch (error) {
+                console.error('Error listing directory:', error);
+            }
+            
+            // Use the actual filename if found, otherwise use the expected filename
+            if (actualFilename) {
+                download.filename = actualFilename;
+                download.filePath = path.join(download.downloadPath, actualFilename);
+            }
+            
+            // Now add metadata to the correct file
+            await this.addMetadataToFile(download.track, download.filePath, download.trackId, download.options);
+            
+            console.log(`Full path: ${download.filePath}`);
+            
+            // Verify file exists
+            try {
+                await fs.access(download.filePath);
+                download.status = 'completed';
+                console.log(`Single track download completed: ${download.filename}`);
+                return { success: true, filePath: download.filePath, filename: download.filename };
+            } catch (error) {
+                throw new Error('Downloaded file not found');
+            }
+            
+        } catch (error) {
+            download.status = 'failed';
+            download.error = error.message;
+            console.error(`Single track download ${downloadId} failed:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    cleanupSingleDownload(downloadId) {
+        const download = this.downloads.get(downloadId);
+        if (download && download.downloadPath) {
+            // Clean up temporary files
+            fs.rmdir(download.downloadPath, { recursive: true }).catch(error => {
+                console.error('Failed to cleanup temp directory:', error);
+            });
+            this.downloads.delete(downloadId);
+        }
     }
 
     cleanupOldDownloads() {

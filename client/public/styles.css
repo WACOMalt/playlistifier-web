@@ -52,17 +52,16 @@ main {
 /* Section styles */
 .section {
     background: white;
-    padding: 2rem;
+    padding: 1.5rem;
     border-radius: 12px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    transition: transform 0.2s ease;
-}
-
-.section:hover {
-    transform: translateY(-2px);
 }
 
 .section.hidden {
+    display: none;
+}
+
+.hidden {
     display: none;
 }
 
@@ -181,14 +180,14 @@ button:active {
     overflow-y: auto;
     border: 1px solid #ddd;
     border-radius: 6px;
-    padding: 1rem;
+    padding: 0.75rem;
     margin-bottom: 1rem;
 }
 
 /* Download options section */
 .download-options {
-    margin: 2rem 0;
-    padding: 1.5rem;
+    margin: 1.5rem 0;
+    padding: 1rem;
     background: #f8f9fa;
     border-radius: 8px;
     border: 1px solid #e9ecef;
@@ -243,8 +242,15 @@ button:active {
     font-family: 'Courier New', monospace;
     font-size: 14px;
     resize: vertical;
-    min-height: 200px;
+    min-height: 38px;
+    max-height: 400px;
     background: white;
+    transition: min-height 0.3s ease;
+}
+
+#youtube-urls:not(:placeholder-shown),
+#youtube-urls:focus {
+    min-height: 200px;
 }
 
 #youtube-urls:focus {
@@ -287,7 +293,7 @@ button:active {
 }
 
 .search-progress {
-    margin-top: 1rem;
+    margin-bottom: 1rem;
     padding: 1rem;
     background: #e9ecef;
     border-radius: 6px;
@@ -295,6 +301,11 @@ button:active {
     font-size: 14px;
     max-height: 200px;
     overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-all;
+    max-width: 100%;
+    overflow-x: auto;
 }
 
 .search-progress.hidden {
@@ -303,10 +314,10 @@ button:active {
 
 .track-item {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
     padding: 0.5rem 0;
     border-bottom: 1px solid #eee;
+    gap: 0.3rem;
 }
 
 .track-item:last-child {
@@ -315,24 +326,34 @@ button:active {
 
 .track-info {
     flex: 1;
+    min-width: 0; /* Allow flex item to shrink */
+    overflow: hidden;
 }
 
 .track-title {
     font-weight: 500;
     color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.15rem;
 }
 
 .track-artist {
     color: #666;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.25rem;
 }
 
 .track-status {
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 0.9rem;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
     font-weight: 500;
-    min-width: 120px;
+    min-width: 100px;
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -390,6 +411,15 @@ button:active {
     color: white;
 }
 
+/* Track actions container */
+.track-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* Individual track download button */
 .track-download-btn {
     background: #28a745;
     color: white;
@@ -398,6 +428,49 @@ button:active {
     border-radius: 4px;
     font-size: 0.8rem;
     cursor: pointer;
+    transition: background 0.3s ease;
+    min-width: 70px;
+}
+
+.track-download-btn:hover {
+    background: #218838;
+}
+
+.track-download-btn:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+}
+
+/* Save button styling */
+.track-save-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    min-width: 50px;
+}
+
+.track-save-btn:hover {
+    background: #0056b3;
+}
+
+.track-save-btn.hidden {
+    display: none;
+}
+
+/* Status indicators for different download states */
+.track-status.downloaded {
+    background: #17a2b8;
+    color: white;
+}
+
+.track-status.saved {
+    background: #6f42c1;
+    color: white;
     transition: background 0.3s ease;
 }
 
@@ -421,6 +494,37 @@ footer {
     padding: 1rem;
     color: rgba(255,255,255,0.8);
     font-size: 0.9rem;
+}
+
+/* Two-column layout for wide screens */
+@media (min-width: 1200px) {
+    .two-column-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        align-items: start;
+    }
+    
+    .two-column-layout .urls-section {
+        order: 1;
+    }
+    
+    .two-column-layout .section {
+        order: 2;
+    }
+    
+    /* Ensure both sections have similar visual weight */
+    .urls-section {
+        min-height: 400px;
+    }
+    
+    #youtube-urls {
+        min-height: 300px;
+    }
+    
+    #tracks-list {
+        min-height: 300px;
+    }
 }
 
 /* Responsive design */

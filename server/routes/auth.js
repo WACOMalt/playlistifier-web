@@ -358,6 +358,7 @@ router.get('/status', (req, res) => {
   res.json({
     authenticated: hasSpotifyAuth,
     spotify: hasSpotifyAuth,
+    token: hasSpotifyAuth ? req.session.spotifyToken.access_token : null,
     expiresAt: req.session?.spotifyToken?.expires_at || null
   });
 });
