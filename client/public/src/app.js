@@ -24,7 +24,7 @@ class PlaylistifierApp {
         });
 
         // Authentication
-        document.getElementById('spotify-auth-btn').addEventListener('click', () => this.authenticateSpotify());
+        document.getElementById('spotify-auth-btn').addEventListener('click', () => this.authenticatePlatform());
 
         // Downloads
         document.getElementById('download-btn').addEventListener('click', () => this.startDownload());
@@ -35,7 +35,7 @@ class PlaylistifierApp {
         document.getElementById('new-download-btn').addEventListener('click', () => this.restart());
         
         // YouTube URLs functionality
-        document.getElementById('search-youtube-btn').addEventListener('click', () => this.searchYouTubeUrls());
+        document.getElementById('search-youtube-btn').addEventListener('click', () => this.searchVideoUrls());
         document.getElementById('save-urls-btn').addEventListener('click', () => this.saveUrlsToFile());
         document.getElementById('copy-urls-btn').addEventListener('click', () => this.copyUrlsToClipboard());
     }
@@ -85,7 +85,7 @@ class PlaylistifierApp {
             const response = await fetch('/api/auth/status');
             const data = await response.json();
             
-            if (data.spotify && data.token) {
+            if (data.platform && data.token) {
                 this.authToken = data.token;
                 console.log('Authentication restored from session');
                 
@@ -132,7 +132,7 @@ class PlaylistifierApp {
             this.showStatus(`Found ${data.platform} ${data.type}`);
             
             // Check if authentication is required
-            if (data.platform === 'spotify' && !this.authToken) {
+            if (data.platform === 'generic' && !this.authToken) {
                 this.showAuthSection();
             } else {
                 this.extractTracks();
@@ -174,7 +174,7 @@ class PlaylistifierApp {
         }
     }
 
-    async authenticateSpotify() {
+    async authenticatePlatform() {
         try {
             const response = await fetch('/api/auth/spotify');
             const data = await response.json();
@@ -791,7 +791,7 @@ class PlaylistifierApp {
     }
     
     async performYouTubeSearch(tracks) {
-        const response = await fetch('/api/search/youtube-urls', {
+        const response = await fetch('/api/search/video-urls', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -808,13 +808,13 @@ class PlaylistifierApp {
         return data.results;
     }
     
-    async performRealTimeYouTubeSearch(tracks, header) {
+async performRealTimeVideoSearch(tracks, header) {
         const youtubeUrlsTextarea = document.getElementById('youtube-urls');
         const searchButton = document.getElementById('search-youtube-btn');
         const progressDiv = document.getElementById('search-progress');
         
         // Setup initial state
-        youtubeUrlsTextarea.value = header + 'Searching for YouTube URLs...';
+        youtubeUrlsTextarea.value = header + 'Searching for Video URLs...';
         youtubeUrlsTextarea.readOnly = true;
         searchButton.disabled = true;
         searchButton.textContent = 'Searching...';
@@ -919,7 +919,7 @@ class PlaylistifierApp {
         }
     }
     
-    async searchYouTubeUrls() {
+async searchVideoUrls() {
         if (!this.currentTracks || this.currentTracks.length === 0) {
             alert('No tracks to search for!');
             return;

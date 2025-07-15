@@ -10,14 +10,14 @@
     <div id="app">
         <header>
             <h1>🎵 Playlistifier Web</h1>
-            <p>Convert playlists from Spotify and YouTube to downloadable MP3 files</p>
+            <p>Convert playlists from music streaming platforms to downloadable MP3 files</p>
         </header>
 
         <main>
             <div id="url-input-section" class="section">
                 <h2>Enter Playlist URL</h2>
                 <div class="input-group">
-                    <input type="text" id="url-input" placeholder="Paste your Spotify or YouTube playlist URL here..." />
+                    <input type="text" id="url-input" placeholder="Paste your playlist URL here..." />
                     <button id="analyze-btn">Analyze</button>
                 </div>
                 <div id="url-error" class="error-message"></div>
@@ -26,19 +26,19 @@
 
             <div id="auth-section" class="section hidden">
                 <h2>Authentication Required</h2>
-                <p>This playlist requires authentication with Spotify.</p>
-                <button id="spotify-auth-btn">Connect to Spotify</button>
+                <p>This playlist requires authentication with the music platform.</p>
+                <button id="spotify-auth-btn">Connect to Platform</button>
                 <div id="auth-status" class="status-message"></div>
             </div>
 
             <div id="main-content" class="two-column-layout hidden">
                 <div id="youtube-urls-section" class="urls-section">
-                    <h2>YouTube URLs</h2>
-                    <p>These are the YouTube URLs found for the tracks (editable):</p>
+                    <h2>Video URLs</h2>
+                    <p>These are the video URLs found for the tracks (editable):</p>
                     <div id="search-progress" class="search-progress hidden"></div>
-                    <textarea id="youtube-urls" placeholder="YouTube URLs will appear here after analyzing a playlist..." rows="10"></textarea>
+                    <textarea id="youtube-urls" placeholder="Video URLs will appear here after analyzing a playlist..." rows="10"></textarea>
                     <div class="url-actions">
-                        <button id="search-youtube-btn" disabled>Re-search YouTube URLs</button>
+                        <button id="search-youtube-btn" disabled>Re-search Video URLs</button>
                         <button id="save-urls-btn">Save URLs to File</button>
                         <button id="copy-urls-btn">Copy URLs</button>
                     </div>
