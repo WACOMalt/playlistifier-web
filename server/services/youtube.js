@@ -13,10 +13,7 @@ class YouTubeService {
         if (this.initialized) return;
         
         try {
-            // Setup tools if needed
-            await setupManager.setup();
-            
-            // Get the path to yt-dlp
+            // Get the path to yt-dlp (setup is done at app startup)
             this.ytDlpPath = setupManager.getYtDlpPath();
             
             this.initialized = true;

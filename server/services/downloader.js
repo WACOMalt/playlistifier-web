@@ -171,11 +171,6 @@ class DownloadService {
         const searchQuery = `${track.artist} ${track.title}`;
         
         try {
-            console.log(`downloadFromSearch: Setting up tools...`);
-            // Ensure setup is complete
-            await setupManager.setup();
-            console.log(`downloadFromSearch: Setup complete`);
-            
             // Generate the expected filename using Spotify metadata
             const expectedFilename = this.generateFilename(track, trackIndex, options);
             const outputTemplate = path.join(outputPath, expectedFilename);
@@ -467,10 +462,7 @@ class DownloadService {
     }
 
     async runCommand(command, args) {
-        // Ensure setup is complete
-        await setupManager.setup();
-        
-        // Use setup manager paths for tools
+        // Use setup manager paths for tools (setup is done at app startup)
         if (command === 'ffmpeg') {
             command = setupManager.getFFmpegPath();
         } else if (command === 'yt-dlp') {

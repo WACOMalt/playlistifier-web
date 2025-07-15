@@ -6,6 +6,9 @@ const yauzl = require('yauzl');
 
 class SetupManager {
     constructor() {
+        this.toolsReady = false;
+        this.cachedYtDlpPath = null;
+        this.cachedFFmpegPath = null;
         this.toolsDir = path.join(process.cwd(), 'tools');
         this.ytDlpPath = path.join(this.toolsDir, 'yt-dlp.exe');
         this.ffmpegPath = path.join(this.toolsDir, 'ffmpeg.exe');
@@ -206,7 +209,11 @@ class SetupManager {
         });
     }
 
-    async setup() {
+async setup() {
+        if (this.toolsReady) {
+            return true; // Skip if already set up
+        }
+
         console.log('Setting up Playlistifier tools...');
         
         await this.ensureToolsDirectory();
@@ -228,6 +235,9 @@ class SetupManager {
         }
         
         if (success) {
+            this.toolsReady = true;
+            this.cachedYtDlpPath = this.ytDlpPath;
+            this.cachedFFmpegPath = this.ffmpegPath;
             console.log('All tools ready!');
         } else {
             console.error('Some tools failed to setup');
@@ -237,11 +247,11 @@ class SetupManager {
     }
 
     getYtDlpPath() {
-        return this.ytDlpPath;
+        return this.cachedYtDlpPath || this.ytDlpPath;
     }
 
     getFFmpegPath() {
-        return this.ffmpegPath;
+        return this.cachedFFmpegPath || this.ffmpegPath;
     }
 }
 
