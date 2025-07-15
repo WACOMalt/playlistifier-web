@@ -986,17 +986,17 @@ async searchVideoUrls() {
         
         if (isAuthenticated) {
             if (authButton) {
-                authButton.textContent = 'Platform Connected ✓';
+                authButton.textContent = 'Spotify Connected ✓';
                 authButton.disabled = true;
                 authButton.style.backgroundColor = '#1db954';
             }
             if (authStatus) {
-                authStatus.textContent = 'Platform authentication active';
+                authStatus.textContent = 'Spotify authentication active';
                 authStatus.className = 'status-message';
             }
         } else {
             if (authButton) {
-                authButton.textContent = 'Connect to Platform';
+                authButton.textContent = 'Connect to Spotify';
                 authButton.disabled = false;
                 authButton.style.backgroundColor = '';
             }
