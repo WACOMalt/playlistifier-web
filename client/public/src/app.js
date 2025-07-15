@@ -85,7 +85,7 @@ class PlaylistifierApp {
             const response = await fetch('/api/auth/status');
             const data = await response.json();
             
-            if (data.platform && data.token) {
+            if (data.spotify && data.token) {
                 this.authToken = data.token;
                 console.log('Authentication restored from session');
                 
@@ -132,7 +132,7 @@ class PlaylistifierApp {
             this.showStatus(`Found ${data.platform} ${data.type}`);
             
             // Check if authentication is required
-            if (data.platform === 'generic' && !this.authToken) {
+            if (data.platform === 'spotify' && !this.authToken) {
                 this.showAuthSection();
             } else {
                 this.extractTracks();
@@ -732,7 +732,7 @@ class PlaylistifierApp {
             youtubeUrlsTextarea.value = fullText;
         } else {
             // For Spotify, automatically search for YouTube URLs with real-time updates
-            await this.performRealTimeYouTubeSearch(tracks, header);
+            await this.performRealTimeVideoSearch(tracks, header);
         }
     }
     
@@ -986,17 +986,17 @@ async searchVideoUrls() {
         
         if (isAuthenticated) {
             if (authButton) {
-                authButton.textContent = 'Spotify Connected ✓';
+                authButton.textContent = 'Platform Connected ✓';
                 authButton.disabled = true;
                 authButton.style.backgroundColor = '#1db954';
             }
             if (authStatus) {
-                authStatus.textContent = 'Spotify authentication active';
+                authStatus.textContent = 'Platform authentication active';
                 authStatus.className = 'status-message';
             }
         } else {
             if (authButton) {
-                authButton.textContent = 'Authenticate with Spotify';
+                authButton.textContent = 'Connect to Platform';
                 authButton.disabled = false;
                 authButton.style.backgroundColor = '';
             }
