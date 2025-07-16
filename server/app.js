@@ -91,6 +91,7 @@ io.on('connection', (socket) => {
         if (sessionId) {
             console.log(`Cleaning up files for session: ${sessionId}`);
             await require('./services/downloader').cleanupSessionFiles(sessionId);
+            await require('./services/downloader').killSessionProcesses(sessionId);
         }
     });
 });

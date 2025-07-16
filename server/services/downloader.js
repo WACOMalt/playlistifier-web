@@ -10,6 +10,8 @@ class DownloadService {
     constructor() {
         this.downloads = new Map();
         this.sessionFiles = new Map(); // Track files by session ID
+        this.sessionProcesses = new Map(); // Track active processes by session ID
+        this.downloadToSession = new Map(); // Map download IDs to session IDs
         this.defaultDownloadPath = process.env.DOWNLOAD_PATH || './downloads';
     }
 
@@ -202,7 +204,7 @@ class DownloadService {
         return await youtubeService.download(track.url, outputPath, onProgress);
     }
 
-    async downloadFromSearch(track, outputPath, socketIo, downloadId, trackIndex = null, options = {}) {
+    async downloadFromSearch(track, outputPath, socketIo, downloadId, trackIndex = null, options = {}, sessionId = null) {
         console.log(`downloadFromSearch: ENTRY - Starting download for ${track.artist} - ${track.title}`);
         
         // Search for the track on YouTube
@@ -239,7 +241,7 @@ class DownloadService {
             console.log(`downloadFromSearch: Downloading ${downloadTarget} to temporary file`);
             
             try {
-                await this.runCommand('yt-dlp', args);
+                await this.runCommand('yt-dlp', args, sessionId);
                 console.log(`downloadFromSearch: yt-dlp command completed successfully`);
             } catch (ytdlpError) {
                 console.error(`downloadFromSearch: yt-dlp command failed:`, ytdlpError);
@@ -272,7 +274,7 @@ class DownloadService {
         }
     }
 
-    async addMetadata(track, outputPath, trackIndex = null, options = {}) {
+    async addMetadata(track, outputPath, trackIndex = null, options = {}, sessionId = null) {
         const filename = this.generateFilename(track, trackIndex, options);
         const filepath = path.join(outputPath, filename);
         
@@ -297,7 +299,7 @@ class DownloadService {
                 
                 // If this is a YouTube thumbnail, crop it to square format
                 if (track.thumbnail && !track.images) {
-                    imagePath = await this.cropThumbnailToSquare(imagePath, outputPath);
+                    imagePath = await this.cropThumbnailToSquare(imagePath, outputPath, sessionId);
                 }
             } catch (error) {
                 console.warn(`Failed to download album art for ${track.title}:`, error.message);
@@ -343,7 +345,7 @@ class DownloadService {
         }
 
         try {
-            await this.runCommand('ffmpeg', args);
+            await this.runCommand('ffmpeg', args, sessionId);
             
             // Replace original file with metadata-enriched version
             await fs.rename(tempFile, filepath);
@@ -365,7 +367,7 @@ class DownloadService {
         }
     }
     
-    async addMetadataToFile(track, filePath, trackIndex = null, options = {}) {
+    async addMetadataToFile(track, filePath, trackIndex = null, options = {}, sessionId = null) {
         // Check if file exists
         try {
             await fs.access(filePath);
@@ -393,7 +395,7 @@ class DownloadService {
                 
                 // If this is a YouTube thumbnail, crop it to square format
                 if (track.thumbnail && !track.images) {
-                    imagePath = await this.cropThumbnailToSquare(imagePath, outputDir);
+                    imagePath = await this.cropThumbnailToSquare(imagePath, outputDir, sessionId);
                 }
             } catch (error) {
                 console.warn(`Failed to download album art for ${track.title}:`, error.message);
@@ -439,7 +441,7 @@ class DownloadService {
         }
         
         try {
-            await this.runCommand('ffmpeg', args);
+            await this.runCommand('ffmpeg', args, sessionId);
             
             // Replace original file with metadata-enriched version
             await fs.rename(tempFile, filePath);
@@ -509,7 +511,7 @@ class DownloadService {
         }
     }
 
-    async cropThumbnailToSquare(imagePath, outputDir) {
+    async cropThumbnailToSquare(imagePath, outputDir, sessionId = null) {
         try {
             // Get image dimensions
             const dimensions = sizeOf(imagePath);
@@ -541,7 +543,7 @@ class DownloadService {
                 croppedPath
             ];
 
-            await this.runCommand('ffmpeg', cropArgs);
+            await this.runCommand('ffmpeg', cropArgs, sessionId);
 
             // Clean up original image
             try {
@@ -559,7 +561,7 @@ class DownloadService {
         }
     }
 
-    async runCommand(command, args) {
+    async runCommand(command, args, sessionId = null) {
         // Use setup manager paths for tools (setup is done at app startup)
         if (command === 'ffmpeg') {
             command = setupManager.getFFmpegPath();
@@ -579,6 +581,11 @@ class DownloadService {
             let stdout = '';
             let stderr = '';
 
+            // Track process for session cleanup if session ID is provided
+            if (sessionId) {
+                this.trackProcessForSession(sessionId, process);
+            }
+
             process.stdout.on('data', (data) => {
                 stdout += data.toString();
             });
@@ -588,6 +595,11 @@ class DownloadService {
             });
 
             process.on('close', (code) => {
+                // Remove process from tracking when it completes
+                if (sessionId) {
+                    this.removeProcessFromSession(sessionId, process);
+                }
+                
                 if (code === 0) {
                     resolve(stdout);
                 } else {
@@ -599,6 +611,10 @@ class DownloadService {
             });
 
             process.on('error', (error) => {
+                // Remove process from tracking on error
+                if (sessionId) {
+                    this.removeProcessFromSession(sessionId, process);
+                }
                 console.error(`Failed to run command: ${error.message}`);
                 reject(new Error(`Failed to run command: ${error.message}`));
             });
@@ -660,7 +676,7 @@ class DownloadService {
         return downloadId;
     }
 
-    async downloadSingleTrack(downloadId, socketIo) {
+    async downloadSingleTrack(downloadId, socketIo, sessionId = null) {
         const download = this.downloads.get(downloadId);
         if (!download) {
             return { success: false, error: 'Download not found' };
@@ -683,7 +699,7 @@ class DownloadService {
             console.log(`downloadSingleTrack: Track has URL: ${!!download.track.url}`);
             console.log(`downloadSingleTrack: Track object:`, download.track);
             try {
-                await this.downloadFromSearch(download.track, download.downloadPath, socketIo, downloadId, download.trackId, download.options);
+                await this.downloadFromSearch(download.track, download.downloadPath, socketIo, downloadId, download.trackId, download.options, sessionId);
                 console.log(`downloadSingleTrack: downloadFromSearch completed successfully`);
             } catch (downloadError) {
                 console.error(`downloadSingleTrack: downloadFromSearch failed:`, downloadError);
@@ -707,7 +723,7 @@ class DownloadService {
             }
             
             // Now add metadata to the correct file
-            await this.addMetadataToFile(download.track, download.filePath, download.trackId, download.options);
+            await this.addMetadataToFile(download.track, download.filePath, download.trackId, download.options, sessionId);
             
             console.log(`Full path: ${download.filePath}`);
             
@@ -899,6 +915,68 @@ class DownloadService {
         }
     }
     
+    // Track a process for a session
+    trackProcessForSession(sessionId, process) {
+        if (!this.sessionProcesses.has(sessionId)) {
+            this.sessionProcesses.set(sessionId, new Set());
+        }
+        this.sessionProcesses.get(sessionId).add(process);
+        console.log(`Tracking process ${process.pid} for session ${sessionId}`);
+    }
+
+    // Remove a process from session tracking
+    removeProcessFromSession(sessionId, process) {
+        const sessionProcesses = this.sessionProcesses.get(sessionId);
+        if (sessionProcesses) {
+            sessionProcesses.delete(process);
+            if (sessionProcesses.size === 0) {
+                this.sessionProcesses.delete(sessionId);
+            }
+        }
+    }
+
+    // Kill all active processes for a session
+    async killSessionProcesses(sessionId) {
+        const sessionProcesses = this.sessionProcesses.get(sessionId);
+        if (!sessionProcesses) {
+            return;
+        }
+
+        console.log(`Killing ${sessionProcesses.size} active processes for session ${sessionId}`);
+        
+        for (const process of sessionProcesses) {
+            try {
+                if (process && process.pid && !process.killed) {
+                    console.log(`Killing process ${process.pid}`);
+                    process.kill('SIGTERM');
+                    
+                    // If SIGTERM doesn't work, use SIGKILL after a short delay
+                    setTimeout(() => {
+                        if (process && process.pid && !process.killed) {
+                            console.log(`Force killing process ${process.pid}`);
+                            process.kill('SIGKILL');
+                        }
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error(`Error killing process ${process.pid}:`, error.message);
+            }
+        }
+        
+        this.sessionProcesses.delete(sessionId);
+    }
+
+    // Track download to session mapping
+    trackDownloadForSession(downloadId, sessionId) {
+        this.downloadToSession.set(downloadId, sessionId);
+        console.log(`Tracking download ${downloadId} for session ${sessionId}`);
+    }
+
+    // Get session ID for a download
+    getSessionForDownload(downloadId) {
+        return this.downloadToSession.get(downloadId);
+    }
+
     // Initialize the service and clean up any leftover temp files
     async initialize() {
         console.log('Initializing download service...');

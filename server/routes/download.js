@@ -115,7 +115,8 @@ router.post('/single', async (req, res) => {
     
     // Start single track download
     const io = req.app.get('io');
-    const result = await downloadService.downloadSingleTrack(downloadId, io);
+    const sessionId = req.session.id;
+    const result = await downloadService.downloadSingleTrack(downloadId, io, sessionId);
     
     if (result.success) {
       // Set headers for file download
