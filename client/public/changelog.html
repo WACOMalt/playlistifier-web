@@ -175,38 +175,6 @@
         </footer>
     </div>
 
-    <script>
-        // Fetch and display changelog from GitHub
-        async function loadChangelog() {
-            const container = document.getElementById('changelog-container');
-            
-            try {
-                const response = await fetch('/api/changelog');
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.error || 'Failed to load changelog');
-                }
-                
-                if (data.releases && data.releases.length > 0) {
-                    container.innerHTML = data.releases.map(release => `
-                        <div class="changelog-entry">
-                            <div class="changelog-version">${release.tag_name}</div>
-                            <div class="changelog-date">${new Date(release.published_at).toLocaleDateString()}</div>
-                            <div class="changelog-body">${release.body || 'No description available.'}</div>
-                        </div>
-                    `).join('');
-                } else {
-                    container.innerHTML = '<div class="error-message">No changelog entries found.</div>';
-                }
-            } catch (error) {
-                console.error('Error loading changelog:', error);
-                container.innerHTML = `<div class="error-message">Error loading changelog: ${error.message}</div>`;
-            }
-        }
-        
-        // Load changelog when page loads
-        document.addEventListener('DOMContentLoaded', loadChangelog);
-    </script>
+    <script src="src/changelog.js"></script>
 </body>
 </html>
