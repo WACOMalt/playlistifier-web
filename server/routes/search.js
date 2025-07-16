@@ -36,7 +36,7 @@ router.post('/youtube-urls', async (req, res) => {
         console.log(`Starting concurrent search for track ${index + 1}/${tracks.length}: ${query}`);
         
         try {
-          const searchResult = await youtubeService.searchTrack(query);
+          const searchResult = await youtubeService.searchTrack(query, track.duration_ms);
           
           if (searchResult && searchResult.url) {
             console.log(`Found (concurrent): ${searchResult.url}`);
@@ -91,7 +91,7 @@ router.post('/youtube-urls', async (req, res) => {
           console.log(`Searching for track ${i+1}/${tracks.length}: ${query}`);
           
           // Use yt-dlp to search for the track
-          const searchResult = await youtubeService.searchTrack(query);
+          const searchResult = await youtubeService.searchTrack(query, track.duration_ms);
           
           if (searchResult && searchResult.url) {
             console.log(`Found: ${searchResult.url}`);
@@ -167,7 +167,7 @@ router.post('/bulk-youtube-urls', async (req, res) => {
         const query = `${track.artist} ${track.title}`.trim();
         
         try {
-          const searchResult = await youtubeService.searchTrack(query);
+          const searchResult = await youtubeService.searchTrack(query, track.duration_ms);
           return {
             index: originalIndex,
             track: track,

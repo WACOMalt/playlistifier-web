@@ -4,6 +4,107 @@ const querystring = require('querystring');
 class SpotifyService {
     constructor() {
         this.baseUrl = 'https://api.spotify.com/v1';
+        this.clientCredentialsToken = null;
+        this.clientCredentialsExpiry = null;
+    }
+
+    async getClientCredentialsToken() {
+        // Check if we have a valid token
+        if (this.clientCredentialsToken && this.clientCredentialsExpiry && Date.now() < this.clientCredentialsExpiry) {
+            return this.clientCredentialsToken;
+        }
+
+        const clientId = process.env.SPOTIFY_CLIENT_ID || "98780a86674b4edfa5eb772dedbcf8ae";
+        const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+        if (!clientSecret) {
+            throw new Error('SPOTIFY_CLIENT_SECRET environment variable is required for public API access');
+        }
+
+        const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+        const tokenUrl = 'https://accounts.spotify.com/api/token';
+        
+        return new Promise((resolve, reject) => {
+            const postData = 'grant_type=client_credentials';
+            
+            const options = {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Basic ${auth}`,
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Length': Buffer.byteLength(postData)
+                }
+            };
+
+            const req = https.request(tokenUrl, options, (res) => {
+                let data = '';
+                
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+                
+                res.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(data);
+                        
+                        if (res.statusCode >= 200 && res.statusCode < 300) {
+                            this.clientCredentialsToken = parsed.access_token;
+                            this.clientCredentialsExpiry = Date.now() + (parsed.expires_in * 1000);
+                            console.log('Client Credentials token obtained successfully');
+                            resolve(this.clientCredentialsToken);
+                        } else {
+                            reject(new Error(parsed.error?.message || `HTTP ${res.statusCode}`));
+                        }
+                    } catch (error) {
+                        reject(new Error('Invalid JSON response from token endpoint'));
+                    }
+                });
+            });
+
+            req.on('error', (error) => {
+                reject(error);
+            });
+
+            req.write(postData);
+            req.end();
+        });
+    }
+
+    async tryPublicApiFirst(url) {
+        try {
+            const clientCredentialsToken = await this.getClientCredentialsToken();
+            const result = await this.extractContent(url, clientCredentialsToken);
+            
+            return {
+                success: true,
+                data: result,
+                authRequired: false
+            };
+        } catch (error) {
+            // Check if the error indicates private content or auth required
+            if (error.message.includes('403') || 
+                error.message.includes('401') || 
+                error.message.includes('404') || // Private playlists may return 404 instead of 403
+                error.message.includes('Resource not found') || // Private playlists often show as "not found"
+                error.message.includes('Insufficient client scope') ||
+                error.message.includes('Only valid bearer authentication supported')) {
+                
+                return {
+                    success: false,
+                    error: error.message,
+                    authRequired: true,
+                    reason: 'This content requires user authentication (likely private playlist or user-specific content)'
+                };
+            }
+            
+            // Other errors (network, invalid URL, etc.)
+            return {
+                success: false,
+                error: error.message,
+                authRequired: false,
+                reason: 'Failed to access content'
+            };
+        }
     }
 
     async makeRequest(endpoint, token, options = {}) {
@@ -33,6 +134,7 @@ class SpotifyService {
                         if (res.statusCode >= 200 && res.statusCode < 300) {
                             resolve(parsed);
                         } else {
+                            console.log(`API Error - Status: ${res.statusCode}, Response:`, parsed);
                             reject(new Error(parsed.error?.message || `HTTP ${res.statusCode}`));
                         }
                     } catch (error) {

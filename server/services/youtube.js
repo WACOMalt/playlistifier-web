@@ -319,7 +319,7 @@ class YouTubeService {
         });
     }
 
-    async searchTrack(query) {
+    async searchTrack(query, expectedDurationMs = null) {
         await this.initialize();
         
         try {
@@ -327,29 +327,30 @@ class YouTubeService {
                 '--dump-json',
                 '--no-warnings',
                 '--quiet',
-                `ytsearch1:${query}`
+                `ytsearch10:${query}`  // Get 10 results instead of 1
             ];
 
             const result = await this.runYtDlpWithOutput(args);
             
             // Even if there are errors, we might still have useful output
-            // Let's try to parse the stdout first
             if (result.stdout) {
                 const lines = result.stdout.trim().split('\n');
+                const videos = [];
                 
-                // Find the line with the actual video information
+                // Parse all video results
                 for (const line of lines) {
                     if (line.trim()) {
                         try {
                             const info = JSON.parse(line);
                             // Check if this is a video entry (not just metadata)
                             if (info && info.id && info.webpage_url) {
-                                return {
+                                videos.push({
                                     url: info.webpage_url,
                                     title: info.title,
                                     uploader: info.uploader,
-                                    duration: info.duration
-                                };
+                                    duration: info.duration,
+                                    view_count: info.view_count || 0
+                                });
                             }
                         } catch (parseError) {
                             // Skip lines that aren't valid JSON
@@ -357,6 +358,19 @@ class YouTubeService {
                         }
                     }
                 }
+                
+                if (videos.length === 0) {
+                    console.error('No videos found for query:', query);
+                    return null;
+                }
+                
+                // If we have an expected duration, use enhanced scoring
+                if (expectedDurationMs) {
+                    return this.selectBestMatch(videos, expectedDurationMs);
+                }
+                
+                // Otherwise, return the first (highest ranked) result
+                return videos[0];
             }
             
             // If we reach here, no valid video info was found
@@ -369,6 +383,50 @@ class YouTubeService {
             console.error('YouTube search error:', error);
             return null;
         }
+    }
+    
+    selectBestMatch(videos, expectedDurationMs) {
+        const expectedDurationSec = expectedDurationMs / 1000;
+        
+        // Calculate length differences for normalization
+        const lengthDifferences = videos.map(video => {
+            const videoDuration = video.duration || 0;
+            return Math.abs(videoDuration - expectedDurationSec);
+        });
+        
+        const maxLengthDiff = Math.max(...lengthDifferences);
+        
+        // Score each video
+        const scoredVideos = videos.map((video, index) => {
+            const lengthDiff = lengthDifferences[index];
+            
+            // Length match score (normalized 0-10, lower is better)
+            const lengthScore = maxLengthDiff > 0 ? (lengthDiff / maxLengthDiff) * 10 : 0;
+            
+            // YouTube ranking score (0-9 based on position, lower is better)
+            const rankingScore = index;
+            
+            // Total score (lower is better)
+            const totalScore = lengthScore + rankingScore;
+            
+            return {
+                ...video,
+                lengthScore,
+                rankingScore,
+                totalScore,
+                lengthDiff: lengthDiff,
+                expectedDuration: expectedDurationSec
+            };
+        });
+        
+        // Sort by total score (ascending - lower is better)
+        scoredVideos.sort((a, b) => a.totalScore - b.totalScore);
+        
+        const bestMatch = scoredVideos[0];
+        
+        console.log(`Best match for expected duration ${expectedDurationSec}s: "${bestMatch.title}" (actual: ${bestMatch.duration}s, diff: ${bestMatch.lengthDiff}s, score: ${bestMatch.totalScore.toFixed(2)})`);
+        
+        return bestMatch;
     }
 
     async checkAvailability() {

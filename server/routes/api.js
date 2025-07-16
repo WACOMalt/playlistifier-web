@@ -48,12 +48,32 @@ router.post('/extract', async (req, res) => {
 
     switch (analysis.platform) {
       case 'spotify':
-        if (!token) {
-          return res.status(401).json({ error: 'Spotify authentication required' });
+        // Try public API first, fall back to OAuth if needed
+        const publicResult = await spotifyService.tryPublicApiFirst(url);
+        
+        if (publicResult.success) {
+          // Successfully got data using public API
+          tracks = publicResult.data.tracks;
+          metadata = publicResult.data;
+          console.log('Used public API for Spotify content');
+        } else if (publicResult.authRequired) {
+          // Need user authentication
+          if (!token) {
+            return res.status(401).json({ 
+              error: 'Spotify authentication required',
+              reason: publicResult.reason,
+              authRequired: true
+            });
+          }
+          // Try with user token
+          const spotifyContent = await spotifyService.extractContent(url, token);
+          tracks = spotifyContent.tracks;
+          metadata = spotifyContent;
+          console.log('Used OAuth API for Spotify content');
+        } else {
+          // Other error (network, invalid URL, etc.)
+          throw new Error(publicResult.error);
         }
-        const spotifyContent = await spotifyService.extractContent(url, token);
-        tracks = spotifyContent.tracks;
-        metadata = spotifyContent;
         break;
       case 'youtube':
         const youtubeContent = await youtubeService.extractContent(url);
@@ -67,6 +87,22 @@ router.post('/extract', async (req, res) => {
     res.json({ tracks, metadata });
   } catch (error) {
     console.error('Track extraction error:', error);
+    
+    // Check if this is an authentication-related error
+    if (error.message.includes('403') || 
+        error.message.includes('401') || 
+        error.message.includes('404') || // Private playlists may return 404 instead of 403
+        error.message.includes('Resource not found') || // Private playlists often show as "not found"
+        error.message.includes('Insufficient client scope') ||
+        error.message.includes('Only valid bearer authentication supported')) {
+      
+      return res.status(401).json({ 
+        error: 'Spotify authentication required',
+        reason: 'This content requires user authentication (likely private playlist or user-specific content)',
+        authRequired: true
+      });
+    }
+    
     res.status(500).json({ error: 'Failed to extract tracks' });
   }
 });

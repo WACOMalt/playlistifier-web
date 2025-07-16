@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -30,7 +30,14 @@ const io = socketIo(server, {
 });
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "img-src": ["'self'", "data:", "https://i.scdn.co", "https://i.ytimg.com", "https://img.youtube.com"],
+    },
+  },
+}));
 app.use(cors());
 
 // Use session middleware

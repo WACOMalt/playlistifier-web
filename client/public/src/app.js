@@ -134,12 +134,8 @@ document.getElementById('download-btn').addEventListener('click', () => this.sav
 
             this.showStatus(`Found ${data.platform} ${data.type}`);
             
-            // Check if authentication is required
-            if (data.platform === 'spotify' && !this.authToken) {
-                this.showAuthSection();
-            } else {
-                this.extractTracks();
-            }
+            // Always try to extract tracks first - let the backend handle hybrid authentication
+            this.extractTracks();
 
         } catch (error) {
             this.showError(error.message);
@@ -166,6 +162,12 @@ document.getElementById('download-btn').addEventListener('click', () => this.sav
             const data = await response.json();
 
             if (!response.ok) {
+                // Check if this is an authentication requirement
+                if (response.status === 401 && data.authRequired) {
+                    console.log('Authentication required:', data.reason);
+                    this.showAuthSection(data.reason);
+                    return;
+                }
                 throw new Error(data.error || 'Track extraction failed');
             }
 
@@ -695,8 +697,16 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
         document.getElementById(sectionId).classList.remove('hidden');
     }
 
-    showAuthSection() {
+    showAuthSection(reason = null) {
         this.showSection('auth-section');
+        
+        // Update the auth message if a reason is provided
+        if (reason) {
+            const authMessage = document.getElementById('auth-message');
+            if (authMessage) {
+                authMessage.textContent = reason;
+            }
+        }
     }
 
     hideAuthSection() {
@@ -718,8 +728,6 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
         
         tracksInfo.innerHTML = `
             <p><strong>Found ${tracks.length} tracks</strong></p>
-            <p>Platform: ${metadata.platform || 'Unknown'}</p>
-            <p>Type: ${metadata.type || 'Unknown'}</p>
         `;
         
         tracksList.innerHTML = tracks.map((track, index) => {
@@ -729,8 +737,32 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
             const statusClass = hasUrl ? 'found' : 'pending';
             const buttonDisabled = hasUrl ? '' : 'disabled';
             
+            // Get the best quality image/thumbnail
+            let imageUrl = null;
+            if (track.images && track.images.length > 0) {
+                // For Spotify tracks, use the medium size image (300x300)
+                const preferredImage = track.images.find(img => img.width === 300) || track.images[0];
+                imageUrl = preferredImage.url;
+            } else if (track.thumbnail) {
+                // For YouTube tracks, use the thumbnail
+                imageUrl = track.thumbnail;
+            }
+            
+            const imageHtml = imageUrl ? 
+                `<div class="track-artwork">
+                    <img src="${imageUrl}" alt="${track.title}" class="track-image ${track.thumbnail ? 'youtube-thumbnail' : 'spotify-artwork'}" 
+                         style="display:none;" 
+                         crossorigin="anonymous" 
+                         data-track-index="${index}" />
+                    <div class="track-image-placeholder ${track.thumbnail ? 'youtube-thumbnail' : 'spotify-artwork'}" style="display:flex;">🎵</div>
+                </div>` : 
+                `<div class="track-artwork">
+                    <div class="track-image-placeholder ${track.thumbnail ? 'youtube-thumbnail' : 'spotify-artwork'}">🎵</div>
+                </div>`;
+            
             return `
                 <div class="track-item" data-track-id="${index}">
+                    ${imageHtml}
                     <div class="track-info">
                         <div class="track-title">${track.title || 'Unknown Title'}</div>
                         <div class="track-artist">${track.artist || 'Unknown Artist'}</div>
@@ -753,6 +785,28 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
                 const trackId = e.target.dataset.trackId;
                 this.saveSingleTrack(trackId);
             }
+        });
+        
+        // Add event listeners for image loading
+        const images = tracksList.querySelectorAll('.track-image');
+        images.forEach(img => {
+            img.addEventListener('load', () => {
+                console.log('Image loaded:', img.src);
+                img.style.display = 'block';
+                const placeholder = img.nextElementSibling;
+                if (placeholder) {
+                    placeholder.style.display = 'none';
+                }
+            });
+            
+            img.addEventListener('error', () => {
+                console.log('Image failed to load:', img.src);
+                img.style.display = 'none';
+                const placeholder = img.nextElementSibling;
+                if (placeholder) {
+                    placeholder.style.display = 'flex';
+                }
+            });
         });
         
         // Show main content container and enable the search button
