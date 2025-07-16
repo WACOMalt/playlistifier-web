@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playlistifier Web - Changelog & FAQ</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Changelog and FAQ for Playlistifier Web - Convert Spotify and YouTube playlists to video URLs.">
+    <meta name="keywords" content="playlist converter, Spotify to YouTube, changelog, FAQ, help">
+    <meta name="author" content="Playlistifier Web">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="🎵 Playlistifier Web - Changelog & FAQ">
+    <meta property="og:description" content="Changelog and FAQ for Playlistifier Web - Convert Spotify and YouTube playlists to video URLs.">
+    <meta property="og:url" content="https://your-domain.com/changelog">
+    <meta property="og:site_name" content="Playlistifier Web">
+    
+    <!-- Additional Meta Tags -->
+    <meta name="theme-color" content="#c0c0c0">
+    <meta name="application-name" content="Playlistifier Web">
+    
+    <link rel="stylesheet" href="https://unpkg.com/98.css">
+    <link rel="stylesheet" href="styles.css">
+    
+    <style>
+        /* Additional styles for changelog page */
+        .changelog-content {
+            max-height: 600px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #fff;
+            border: 2px inset #c0c0c0;
+            border-top: 2px solid #808080;
+            border-left: 2px solid #808080;
+            border-right: 2px solid #dfdfdf;
+            border-bottom: 2px solid #dfdfdf;
+        }
+        
+        .changelog-entry {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-bottom: 1px solid #c0c0c0;
+        }
+        
+        .changelog-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .changelog-version {
+            font-weight: bold;
+            color: #000080;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        
+        .changelog-date {
+            color: #666;
+            font-size: 11px;
+            margin-bottom: 10px;
+        }
+        
+        .changelog-body {
+            font-size: 11px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+        
+        .faq-content {
+            padding: 10px;
+            background: #fff;
+            border: 2px inset #c0c0c0;
+            border-top: 2px solid #808080;
+            border-left: 2px solid #808080;
+            border-right: 2px solid #dfdfdf;
+            border-bottom: 2px solid #dfdfdf;
+        }
+        
+        .faq-question {
+            font-weight: bold;
+            margin-bottom: 10px;
+            margin-top: 20px;
+            font-size: 12px;
+        }
+        
+        .faq-question:first-child {
+            margin-top: 0;
+        }
+        
+        .faq-answer {
+            margin-bottom: 15px;
+            line-height: 1.4;
+            font-size: 11px;
+        }
+        
+        .loading-message {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: #666;
+        }
+        
+        .error-message {
+            text-align: center;
+            padding: 20px;
+            color: #800000;
+            font-weight: bold;
+        }
+        
+        .back-link {
+            margin-bottom: 20px;
+        }
+        
+        .back-link a {
+            color: #000080;
+            text-decoration: underline;
+            font-size: 11px;
+        }
+        
+        .back-link a:visited {
+            color: #800080;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>🎵 Playlistifier Web</h1>
+            <p>Changelog & FAQ</p>
+        </header>
+
+        <main>
+            <div class="back-link">
+                <a href="/">&larr; Back to Main Page</a>
+            </div>
+            
+            <div class="window">
+                <div class="title-bar">
+                    <div class="title-bar-text">Changelog & FAQ</div>
+                    <div class="title-bar-controls">
+                        <button aria-label="Minimize"></button>
+                        <button aria-label="Maximize"></button>
+                        <button aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="window-body">
+                    <!-- FAQ Section -->
+                    <fieldset>
+                        <legend>Frequently Asked Questions</legend>
+                        <div class="faq-content">
+                            <div class="faq-question">What does this tool do?</div>
+                            <div class="faq-answer">
+                                This Tool uses the Spotify Web Data API to look up your playlists and create a list of the tracks. It then does its best to search for those songs on YouTube. The tool then provides a list of individual YouTube URLs which can be used by the user. The tool also makes it easy to convert a Youtube Playlist into an easy list of individual video URLs. It does this using the official APIs for each service. In practice, this tool enables nothing a user of each service couldn't already do manually, it just makes it much easier!
+                            </div>
+                            <div class="faq-answer">
+                                Using our built in converter, users can take their downloaded video file and convert and tag the file to a high quality MP3 using the data from spotify.
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Changelog Section -->
+                    <fieldset>
+                        <legend>Changelog</legend>
+                        <div id="changelog-container" class="changelog-content">
+                            <div class="loading-message">Loading changelog...</div>
+                        </div>
+                    </fieldset>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Playlistifier Web v1.2.0</p>
+        </footer>
+    </div>
+
+    <script>
+        // Fetch and display changelog from GitHub
+        async function loadChangelog() {
+            const container = document.getElementById('changelog-container');
+            
+            try {
+                const response = await fetch('/api/changelog');
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load changelog');
+                }
+                
+                if (data.releases && data.releases.length > 0) {
+                    container.innerHTML = data.releases.map(release => `
+                        <div class="changelog-entry">
+                            <div class="changelog-version">${release.tag_name}</div>
+                            <div class="changelog-date">${new Date(release.published_at).toLocaleDateString()}</div>
+                            <div class="changelog-body">${release.body || 'No description available.'}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div class="error-message">No changelog entries found.</div>';
+                }
+            } catch (error) {
+                console.error('Error loading changelog:', error);
+                container.innerHTML = `<div class="error-message">Error loading changelog: ${error.message}</div>`;
+            }
+        }
+        
+        // Load changelog when page loads
+        document.addEventListener('DOMContentLoaded', loadChangelog);
+    </script>
+</body>
+</html>

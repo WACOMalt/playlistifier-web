@@ -165,4 +165,43 @@ function analyzeUrl(url) {
   return analysis;
 }
 
+// Changelog endpoint - fetch GitHub releases
+router.get('/changelog', async (req, res) => {
+  try {
+    const fetch = require('node-fetch');
+    const response = await fetch('https://api.github.com/repos/WACOMalt/playlistifier-web/releases', {
+      headers: {
+        'User-Agent': 'Playlistifier-Web/1.2.0',
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`GitHub API returned ${response.status}: ${response.statusText}`);
+    }
+    
+    const releases = await response.json();
+    
+    // Filter and format releases
+    const formattedReleases = releases
+      .filter(release => !release.draft && !release.prerelease)
+      .map(release => ({
+        tag_name: release.tag_name,
+        name: release.name,
+        body: release.body,
+        published_at: release.published_at,
+        html_url: release.html_url
+      }))
+      .slice(0, 10); // Limit to 10 most recent releases
+    
+    res.json({ releases: formattedReleases });
+  } catch (error) {
+    console.error('Error fetching changelog:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch changelog from GitHub',
+      message: error.message 
+    });
+  }
+});
+
 module.exports = router;

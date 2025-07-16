@@ -98,6 +98,11 @@ io.on('connection', (socket) => {
 // Make io available to routes
 app.set('io', io);
 
+// Specific route for changelog page
+app.get('/changelog', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/public/changelog.html'));
+});
+
 // Catch-all handler for SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/public/index.html'));
