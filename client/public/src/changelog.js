@@ -26,7 +26,9 @@ class ChangelogPage {
             if (data.releases && data.releases.length > 0) {
                 container.innerHTML = data.releases.map(release => `
                     <div class="changelog-entry">
-                        <div class="changelog-version">${release.tag_name}</div>
+                        <div class="changelog-version">
+                            <a href="${release.html_url}" target="_blank" rel="noopener noreferrer" class="version-link">${release.tag_name}</a>
+                        </div>
                         <div class="changelog-date">${new Date(release.published_at).toLocaleDateString()}</div>
                         <div class="changelog-body">${release.body || 'No description available.'}</div>
                     </div>

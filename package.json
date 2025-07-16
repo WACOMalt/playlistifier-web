@@ -1,6 +1,6 @@
 {
   "name": "playlistifier-web",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Web-based playlist converter for Spotify and YouTube with real-time progress tracking",
   "main": "server/app.js",
   "scripts": {
@@ -29,6 +29,7 @@
     "express": "^4.18.2",
     "express-session": "^1.18.1",
     "helmet": "^8.1.0",
+    "image-size": "^2.0.2",
     "node-fetch": "^2.7.0",
     "socket.io": "^4.8.1",
     "yauzl": "^3.2.0"

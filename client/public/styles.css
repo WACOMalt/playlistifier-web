@@ -230,6 +230,14 @@ fieldset label {
     padding: 0 !important;
 }
 
+/* Download options row - horizontal layout */
+.download-options-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 20px !important;
+    flex-wrap: wrap !important;
+}
+
 /* Paragraphs in window bodies */
 .window-body p {
     font-size: 12.65px;

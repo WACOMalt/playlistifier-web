@@ -194,6 +194,13 @@ class YouTubeService {
     }
 
     formatTrack(entry) {
+        // Generate thumbnail URL from video ID if not provided
+        let thumbnailUrl = entry.thumbnail;
+        if (!thumbnailUrl && entry.id) {
+            // Use high-quality YouTube thumbnail URL
+            thumbnailUrl = `https://i.ytimg.com/vi/${entry.id}/maxresdefault.jpg`;
+        }
+        
         return {
             id: entry.id,
             title: entry.title,
@@ -201,8 +208,8 @@ class YouTubeService {
             album: 'YouTube',
             duration: this.formatDuration(entry.duration),
             duration_ms: (entry.duration || 0) * 1000,
-            url: entry.url || entry.webpage_url,
-            thumbnail: entry.thumbnail,
+            url: entry.url || entry.webpage_url || `https://www.youtube.com/watch?v=${entry.id}`,
+            thumbnail: thumbnailUrl,
             view_count: entry.view_count,
             upload_date: entry.upload_date,
             description: entry.description,
@@ -219,34 +226,49 @@ class YouTubeService {
     }
 
     extractIdFromUrl(url) {
-        // YouTube URL patterns
-        const patterns = [
-            {
-                regex: /(?:youtube\.com\/playlist\?list=|youtu\.be\/playlist\?list=)([a-zA-Z0-9_-]+)/,
-                type: 'playlist'
-            },
-            {
-                regex: /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/,
-                type: 'video'
-            },
-            {
-                regex: /youtube\.com\/channel\/([a-zA-Z0-9_-]+)/,
-                type: 'channel'
-            },
-            {
-                regex: /youtube\.com\/@([a-zA-Z0-9_-]+)/,
-                type: 'channel'
-            }
-        ];
-
-        for (const pattern of patterns) {
-            const match = url.match(pattern.regex);
-            if (match) {
-                return {
-                    type: pattern.type,
-                    id: match[1]
-                };
-            }
+        // Check for playlist first - any URL with list= parameter
+        const listMatch = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+        if (listMatch) {
+            return {
+                type: 'playlist',
+                id: listMatch[1]
+            };
+        }
+        
+        // Check for individual video
+        const videoMatch = url.match(/[?&]v=([a-zA-Z0-9_-]+)/);
+        if (videoMatch) {
+            return {
+                type: 'video',
+                id: videoMatch[1]
+            };
+        }
+        
+        // Check for youtu.be short URLs
+        const youtubeMatch = url.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
+        if (youtubeMatch) {
+            return {
+                type: 'video',
+                id: youtubeMatch[1]
+            };
+        }
+        
+        // Check for channel URLs
+        const channelMatch = url.match(/youtube\.com\/channel\/([a-zA-Z0-9_-]+)/);
+        if (channelMatch) {
+            return {
+                type: 'channel',
+                id: channelMatch[1]
+            };
+        }
+        
+        // Check for @ channel URLs
+        const atChannelMatch = url.match(/youtube\.com\/@([a-zA-Z0-9_-]+)/);
+        if (atChannelMatch) {
+            return {
+                type: 'channel',
+                id: atChannelMatch[1]
+            };
         }
 
         return null;
@@ -344,12 +366,21 @@ class YouTubeService {
                             const info = JSON.parse(line);
                             // Check if this is a video entry (not just metadata)
                             if (info && info.id && info.webpage_url) {
+                                // Generate thumbnail URL from video ID if not provided
+                                let thumbnailUrl = info.thumbnail;
+                                if (!thumbnailUrl && info.id) {
+                                    // Use high-quality YouTube thumbnail URL
+                                    thumbnailUrl = `https://i.ytimg.com/vi/${info.id}/maxresdefault.jpg`;
+                                }
+                                
                                 videos.push({
                                     url: info.webpage_url,
                                     title: info.title,
                                     uploader: info.uploader,
                                     duration: info.duration,
-                                    view_count: info.view_count || 0
+                                    view_count: info.view_count || 0,
+                                    thumbnail: thumbnailUrl,
+                                    id: info.id
                                 });
                             }
                         } catch (parseError) {

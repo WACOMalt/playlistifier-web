@@ -1,24 +1,46 @@
 const express = require('express');
 const youtubeService = require('../services/youtube');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+
+// Create logs directory if it doesn't exist
+const logsDir = path.join(__dirname, '..', 'logs');
+if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+}
+
+// Logger function
+function logToFile(message, level = 'INFO') {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [${level}] ${message}`;
+    
+    // Log to console
+    console.log(logMessage);
+    
+    // Log to file
+    const logFile = path.join(logsDir, `youtube-search-${new Date().toISOString().split('T')[0]}.log`);
+    fs.appendFileSync(logFile, logMessage + '\n');
+}
 
 // Search for YouTube URLs for a list of tracks
 router.post('/youtube-urls', async (req, res) => {
+  const requestId = Math.random().toString(36).substring(7);
+  
   try {
-    console.log('YouTube search request received');
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
-    console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+    logToFile(`[${requestId}] YouTube search request received`);
+    logToFile(`[${requestId}] Request body: ${JSON.stringify(req.body, null, 2)}`);
     
     const { tracks, concurrent = false } = req.body;
     
     if (!tracks || !Array.isArray(tracks)) {
-      console.error('Invalid tracks data:', { tracks, type: typeof tracks, isArray: Array.isArray(tracks) });
+      logToFile(`[${requestId}] Invalid tracks data: ${JSON.stringify({ tracks, type: typeof tracks, isArray: Array.isArray(tracks) })}`, 'ERROR');
       return res.status(400).json({ error: 'Tracks array is required' });
     }
     
-    console.log(`Processing ${tracks.length} tracks for YouTube search (concurrent: ${concurrent})`);
+    logToFile(`[${requestId}] Processing ${tracks.length} tracks for YouTube search (concurrent: ${concurrent})`);
     for (let i = 0; i < Math.min(tracks.length, 3); i++) {
-      console.log(`Track ${i}:`, tracks[i]);
+      logToFile(`[${requestId}] Track ${i}: ${JSON.stringify(tracks[i])}`);
     }
 
     let results = [];
@@ -26,83 +48,130 @@ router.post('/youtube-urls', async (req, res) => {
     let failed = 0;
 
     if (concurrent && tracks.length > 1) {
-      // Concurrent search with controlled parallelism
+      // Queue-based search with controlled parallelism
       const maxConcurrency = Math.min(5, tracks.length); // Limit to 5 concurrent searches
-      console.log(`Using concurrent search with ${maxConcurrency} parallel requests`);
+      logToFile(`[${requestId}] Using queue-based search with ${maxConcurrency} parallel requests`);
       
-      // Create search promises for all tracks
-      const searchPromises = tracks.map(async (track, index) => {
-        const query = `${track.artist} ${track.title}`.trim();
-        console.log(`Starting concurrent search for track ${index + 1}/${tracks.length}: ${query}`);
+      // Initialize queue tracking
+      const activeSearches = new Set();
+      let nextIndex = 0;
+      const startTime = Date.now();
+      
+      // Function to process the next track search
+      const processNextSearch = async () => {
+        if (nextIndex >= tracks.length) return; // No more tracks to process
+        if (activeSearches.size >= maxConcurrency) return; // Max active limit reached
         
+        const currentIndex = nextIndex;
+        const currentTrack = tracks[currentIndex];
+        const query = `${currentTrack.artist} ${currentTrack.title}`.trim();
+        
+        activeSearches.add(currentIndex);
+        nextIndex++;
+        
+        logToFile(`[${requestId}] Starting search for track ${currentIndex + 1}/${tracks.length}: ${query}`);
+        logToFile(`[${requestId}] Active searches: ${activeSearches.size}, Next index: ${nextIndex}`);
+        
+        const trackStartTime = Date.now();
         try {
-          const searchResult = await youtubeService.searchTrack(query, track.duration_ms);
+          const searchResult = await youtubeService.searchTrack(query, currentTrack.duration_ms);
+          const searchDuration = Date.now() - trackStartTime;
+          activeSearches.delete(currentIndex);
           
           if (searchResult && searchResult.url) {
-            console.log(`Found (concurrent): ${searchResult.url}`);
-            return {
-              index: index,
-              track: track,
+            logToFile(`[${requestId}] Found (${searchDuration}ms): ${searchResult.url}`);
+            results[currentIndex] = {
+              index: currentIndex,
+              track: currentTrack,
               url: searchResult.url,
-              found: true
+              found: true,
+              thumbnail: searchResult.thumbnail,
+              title: searchResult.title,
+              uploader: searchResult.uploader,
+              duration: searchResult.duration
             };
           } else {
-            console.log(`Not found (concurrent): ${query}`);
-            return {
-              index: index,
-              track: track,
+            logToFile(`[${requestId}] Not found (${searchDuration}ms): ${query}`);
+            results[currentIndex] = {
+              index: currentIndex,
+              track: currentTrack,
               url: null,
               found: false
             };
           }
         } catch (error) {
-          console.error(`Concurrent search failed for track ${index} (${query}):`, error.message);
-          return {
-            index: index,
-            track: track,
+          const searchDuration = Date.now() - trackStartTime;
+          logToFile(`[${requestId}] Search failed for track ${currentIndex} (${searchDuration}ms) (${query}): ${error.message}`, 'ERROR');
+          activeSearches.delete(currentIndex);
+          results[currentIndex] = {
+            index: currentIndex,
+            track: currentTrack,
             url: null,
             found: false,
             error: error.message
           };
         }
-      });
+        
+        // Check if we can start another search after a delay
+        if (nextIndex < tracks.length) {
+          logToFile(`[${requestId}] Scheduling next search in 2s (remaining: ${tracks.length - nextIndex})`);
+          setTimeout(processNextSearch, 2000);
+        }
+      };
       
-      // Execute searches with controlled concurrency
-      const concurrentResults = [];
-      for (let i = 0; i < searchPromises.length; i += maxConcurrency) {
-        const batch = searchPromises.slice(i, i + maxConcurrency);
-        const batchResults = await Promise.all(batch);
-        concurrentResults.push(...batchResults);
-        console.log(`Completed batch ${Math.floor(i / maxConcurrency) + 1}/${Math.ceil(searchPromises.length / maxConcurrency)}`);
+      // Pre-allocate results array
+      results = new Array(tracks.length);
+      
+      // Start the initial search processes
+      logToFile(`[${requestId}] Starting ${Math.min(maxConcurrency, tracks.length)} initial searches`);
+      for (let i = 0; i < Math.min(maxConcurrency, tracks.length); i++) {
+        setTimeout(() => processNextSearch(), i * 2000); // Stagger initial searches by 2 seconds
       }
       
-      // Sort results by original index to maintain order
-      results = concurrentResults.sort((a, b) => a.index - b.index);
+      // Wait until all searches are complete
+      while (nextIndex < tracks.length || activeSearches.size > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (nextIndex < tracks.length || activeSearches.size > 0) {
+          logToFile(`[${requestId}] Waiting... Next index: ${nextIndex}/${tracks.length}, Active: ${activeSearches.size}`);
+        }
+      }
+      
+      const totalDuration = Date.now() - startTime;
+      logToFile(`[${requestId}] Queue-based search completed in ${totalDuration}ms`);
+      
+      // Filter out undefined results and sort by index
+      results = results.filter(result => result !== undefined).sort((a, b) => a.index - b.index);
       
     } else {
       // Sequential search (original behavior)
-      console.log('Using sequential search');
+      logToFile(`[${requestId}] Using sequential search`);
       
       for (let i = 0; i < tracks.length; i++) {
         const track = tracks[i];
         const query = `${track.artist} ${track.title}`.trim();
         
         try {
-          console.log(`Searching for track ${i+1}/${tracks.length}: ${query}`);
+          logToFile(`[${requestId}] Searching for track ${i+1}/${tracks.length}: ${query}`);
           
+          const trackStartTime = Date.now();
           // Use yt-dlp to search for the track
           const searchResult = await youtubeService.searchTrack(query, track.duration_ms);
+          const searchDuration = Date.now() - trackStartTime;
           
           if (searchResult && searchResult.url) {
-            console.log(`Found: ${searchResult.url}`);
+            logToFile(`[${requestId}] Found (${searchDuration}ms): ${searchResult.url}`);
             results.push({
               index: i,
               track: track,
               url: searchResult.url,
-              found: true
+              found: true,
+              thumbnail: searchResult.thumbnail,
+              title: searchResult.title,
+              uploader: searchResult.uploader,
+              duration: searchResult.duration
             });
           } else {
-            console.log(`Not found: ${query}`);
+            logToFile(`[${requestId}] Not found (${searchDuration}ms): ${query}`);
             results.push({
               index: i,
               track: track,
@@ -111,8 +180,8 @@ router.post('/youtube-urls', async (req, res) => {
             });
           }
         } catch (error) {
-          console.error(`Search failed for track ${i} (${query}):`, error.message);
-          console.error('Error stack:', error.stack);
+          logToFile(`[${requestId}] Search failed for track ${i} (${query}): ${error.message}`, 'ERROR');
+          logToFile(`[${requestId}] Error stack: ${error.stack}`, 'ERROR');
           results.push({
             index: i,
             track: track,
@@ -153,47 +222,64 @@ router.post('/bulk-youtube-urls', async (req, res) => {
       return res.status(400).json({ error: 'Tracks array is required' });
     }
     
-    console.log(`Bulk search: Processing ${tracks.length} tracks with ${maxConcurrency} concurrent requests`);
+    console.log(`Bulk search: Processing ${tracks.length} tracks with a search queue`);
     
-    // Set up controlled concurrency
-    const concurrency = Math.min(maxConcurrency, tracks.length);
+    // Initialize queue and search status tracking
     const results = [];
-    
-    // Process tracks in batches
-    for (let i = 0; i < tracks.length; i += concurrency) {
-      const batch = tracks.slice(i, i + concurrency);
-      const batchPromises = batch.map(async (track, batchIndex) => {
-        const originalIndex = i + batchIndex;
-        const query = `${track.artist} ${track.title}`.trim();
-        
-        try {
-          const searchResult = await youtubeService.searchTrack(query, track.duration_ms);
-          return {
-            index: originalIndex,
-            track: track,
-            url: searchResult?.url || null,
-            found: !!(searchResult?.url),
-            title: searchResult?.title || null,
-            uploader: searchResult?.uploader || null,
-            duration: searchResult?.duration || null
-          };
-        } catch (error) {
-          console.error(`Batch search failed for track ${originalIndex} (${query}):`, error.message);
-          return {
-            index: originalIndex,
-            track: track,
-            url: null,
-            found: false,
-            error: error.message
-          };
-        }
-      });
-      
-      const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults);
-      
-      // Optional: Send progress update via WebSocket if needed
-      console.log(`Batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(tracks.length / concurrency)} completed`);
+    const activeSearches = new Set();
+    let nextIndex = 0;
+
+    // Function to process the next track search
+    const processNextSearch = async () => {
+      if (nextIndex >= tracks.length) return; // No more tracks to process
+      if (activeSearches.size >= maxConcurrency) return; // Max active limit reached
+
+      const currentIndex = nextIndex;
+      const currentTrack = tracks[currentIndex];
+      const query = `${currentTrack.artist} ${currentTrack.title}`.trim();
+
+      activeSearches.add(currentIndex);
+      nextIndex++;
+
+      try {
+        const searchResult = await youtubeService.searchTrack(query, currentTrack.duration_ms);
+        activeSearches.delete(currentIndex);
+        results[currentIndex] = {
+          index: currentIndex,
+          track: currentTrack,
+          url: searchResult?.url || null,
+          found: !!(searchResult?.url),
+          title: searchResult?.title || null,
+          uploader: searchResult?.uploader || null,
+          duration: searchResult?.duration || null,
+          thumbnail: searchResult?.thumbnail || null
+        };
+      } catch (error) {
+        console.error(`Search failed for track ${currentIndex} (${query}):`, error.message);
+        activeSearches.delete(currentIndex);
+        results[currentIndex] = {
+          index: currentIndex,
+          track: currentTrack,
+          url: null,
+          found: false,
+          error: error.message
+        };
+      }
+
+      // Check if we can start another search after a delay
+      if (nextIndex < tracks.length) {
+        setTimeout(processNextSearch, 2000);
+      }
+    };
+
+    // Start the initial search processes
+    for (let i = 0; i < Math.min(maxConcurrency, tracks.length); i++) {
+      setTimeout(() => processNextSearch(), i * 2000); // Stagger initial searches by 2 seconds
+    }
+
+    // Wait until all searches are complete
+    while (nextIndex < tracks.length || activeSearches.size > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
     // Sort results by original index
@@ -209,7 +295,7 @@ router.post('/bulk-youtube-urls', async (req, res) => {
         total: tracks.length,
         found: found,
         failed: failed,
-        concurrency: concurrency
+        concurrency: maxConcurrency
       }
     });
     

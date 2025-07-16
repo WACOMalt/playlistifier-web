@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { spawn } = require('child_process');
 const fetch = require('node-fetch');
+const sizeOf = require('image-size');
 const youtubeService = require('./youtube');
 const setupManager = require('../utils/setup');
 
@@ -82,54 +83,91 @@ class DownloadService {
 
     async processDownload(download, socketIo) {
         const { tracks, options } = download;
+        const maxConcurrency = 5; // Maximum 5 concurrent downloads
         
-        for (let i = 0; i < tracks.length; i++) {
-            const track = tracks[i];
-            download.currentTrack = track;
+        // Initialize queue tracking
+        const activeDownloads = new Set();
+        const results = new Array(tracks.length); // Pre-allocate results array
+        let nextIndex = 0;
+        
+        // Function to process the next track download
+        const processNextDownload = async () => {
+            if (nextIndex >= tracks.length) return; // No more tracks to process
+            if (activeDownloads.size >= maxConcurrency) return; // Max concurrent limit reached
+            
+            const currentIndex = nextIndex;
+            const currentTrack = tracks[currentIndex];
+            nextIndex++;
+            
+            activeDownloads.add(currentIndex);
+            download.currentTrack = currentTrack;
             
             try {
-                await this.downloadTrack(track, download, socketIo, i);
+                await this.downloadTrack(currentTrack, download, socketIo, currentIndex);
+                activeDownloads.delete(currentIndex);
+                
                 download.completedTracks++;
-                const filename = this.generateFilename(track, i, download.options);
-                download.results.push({
-                    trackId: i,
-                    track: track,
+                const filename = this.generateFilename(currentTrack, currentIndex, download.options);
+                results[currentIndex] = {
+                    trackId: currentIndex,
+                    track: currentTrack,
                     status: 'completed',
                     filename: filename
-                });
+                };
                 
                 socketIo.to(`download-${download.id}`).emit('download-complete', {
                     downloadId: download.id,
-                    trackId: i,
-                    track: track
+                    trackId: currentIndex,
+                    track: currentTrack
                 });
                 
             } catch (error) {
+                activeDownloads.delete(currentIndex);
+                
                 download.failedTracks++;
-                download.results.push({
-                    trackId: i,
-                    track: track,
+                results[currentIndex] = {
+                    trackId: currentIndex,
+                    track: currentTrack,
                     status: 'failed',
                     error: error.message
-                });
+                };
                 
                 socketIo.to(`download-${download.id}`).emit('download-error', {
                     downloadId: download.id,
-                    trackId: i,
-                    track: track,
+                    trackId: currentIndex,
+                    track: currentTrack,
                     error: error.message
                 });
             }
             
             // Update overall progress
-            download.progress = Math.round(((i + 1) / tracks.length) * 100);
+            const completedTracks = download.completedTracks + download.failedTracks;
+            download.progress = Math.round((completedTracks / tracks.length) * 100);
             
             socketIo.to(`download-${download.id}`).emit('progress-update', {
                 downloadId: download.id,
                 progress: download.progress,
-                status: `Downloaded ${i + 1} of ${tracks.length} tracks`
+                status: `Downloaded ${completedTracks} of ${tracks.length} tracks`
             });
+            
+            // Check if we can start another download after a delay
+            if (nextIndex < tracks.length) {
+                setTimeout(processNextDownload, 2000);
+            }
+        };
+        
+        // Start the initial download processes
+        for (let i = 0; i < Math.min(maxConcurrency, tracks.length); i++) {
+            setTimeout(() => processNextDownload(), i * 2000); // Stagger initial downloads by 2 seconds
         }
+        
+        // Wait until all downloads are complete
+        while (nextIndex < tracks.length || activeDownloads.size > 0) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+        // Set results in the download object
+        download.results = results.filter(result => result !== undefined);
     }
 
     async downloadTrack(track, download, socketIo, trackIndex) {
@@ -245,8 +283,8 @@ class DownloadService {
             return; // File doesn't exist, skip metadata
         }
 
-        // Download and embed album art
-        const imageUrl = track.images && track.images.length > 0 ? track.images[0].url : null;
+        // Download and embed album art (Spotify images or YouTube thumbnail)
+        const imageUrl = (track.images && track.images.length > 0) ? track.images[0].url : track.thumbnail;
         let imagePath = null;
         if (imageUrl) {
             const imageFileName = `album_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
@@ -256,6 +294,11 @@ class DownloadService {
                 const imageResponse = await fetch(imageUrl);
                 const buffer = await imageResponse.buffer();
                 await fs.writeFile(imagePath, buffer);
+                
+                // If this is a YouTube thumbnail, crop it to square format
+                if (track.thumbnail && !track.images) {
+                    imagePath = await this.cropThumbnailToSquare(imagePath, outputPath);
+                }
             } catch (error) {
                 console.warn(`Failed to download album art for ${track.title}:`, error.message);
                 imagePath = null;
@@ -336,8 +379,8 @@ class DownloadService {
         // Get directory for temporary files
         const outputDir = path.dirname(filePath);
         
-        // Download and embed album art
-        const imageUrl = track.images && track.images.length > 0 ? track.images[0].url : null;
+        // Download and embed album art (Spotify images or YouTube thumbnail)
+        const imageUrl = (track.images && track.images.length > 0) ? track.images[0].url : track.thumbnail;
         let imagePath = null;
         if (imageUrl) {
             const imageFileName = `album_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
@@ -347,6 +390,11 @@ class DownloadService {
                 const imageResponse = await fetch(imageUrl);
                 const buffer = await imageResponse.buffer();
                 await fs.writeFile(imagePath, buffer);
+                
+                // If this is a YouTube thumbnail, crop it to square format
+                if (track.thumbnail && !track.images) {
+                    imagePath = await this.cropThumbnailToSquare(imagePath, outputDir);
+                }
             } catch (error) {
                 console.warn(`Failed to download album art for ${track.title}:`, error.message);
                 imagePath = null;
@@ -461,12 +509,67 @@ class DownloadService {
         }
     }
 
+    async cropThumbnailToSquare(imagePath, outputDir) {
+        try {
+            // Get image dimensions
+            const dimensions = sizeOf(imagePath);
+            const width = dimensions.width;
+            const height = dimensions.height;
+
+            // If already square, return original
+            if (width === height) {
+                console.log(`Image is already square (${width}x${height}), no cropping needed`);
+                return imagePath;
+            }
+
+            // Calculate crop parameters for center crop to square
+            const size = Math.min(width, height);
+            const xOffset = Math.floor((width - size) / 2);
+
+            console.log(`Cropping thumbnail from ${width}x${height} to ${size}x${size}`);
+
+            // Create output filename
+            const croppedFileName = `cropped_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+            const croppedPath = path.join(outputDir, croppedFileName);
+
+            // Use ffmpeg to crop the image
+            const cropArgs = [
+                '-i', imagePath,
+                '-vf', `crop=${size}:${size}:${xOffset}:0`,
+                '-q:v', '2', // High quality
+                '-y', // Overwrite output file
+                croppedPath
+            ];
+
+            await this.runCommand('ffmpeg', cropArgs);
+
+            // Clean up original image
+            try {
+                await fs.unlink(imagePath);
+            } catch (cleanupError) {
+                console.warn('Failed to cleanup original image:', cleanupError.message);
+            }
+
+            console.log(`Successfully cropped thumbnail to square: ${croppedPath}`);
+            return croppedPath;
+
+        } catch (error) {
+            console.warn('Failed to crop thumbnail to square:', error.message);
+            return imagePath; // Return original if cropping fails
+        }
+    }
+
     async runCommand(command, args) {
         // Use setup manager paths for tools (setup is done at app startup)
         if (command === 'ffmpeg') {
             command = setupManager.getFFmpegPath();
         } else if (command === 'yt-dlp') {
             command = setupManager.getYtDlpPath();
+        } else if (command === 'ffprobe') {
+            // ffprobe is usually in the same directory as ffmpeg
+            const ffmpegPath = setupManager.getFFmpegPath();
+            const ffmpegDir = path.dirname(ffmpegPath);
+            command = path.join(ffmpegDir, 'ffprobe.exe');
         }
         
         console.log(`Running command: ${command} ${args.join(' ')}`);

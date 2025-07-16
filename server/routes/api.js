@@ -122,13 +122,14 @@ function analyzeUrl(url) {
     /spotify:(playlist|album|track):([a-zA-Z0-9]+)/
   ];
 
-  // YouTube URL patterns
+  // YouTube URL patterns - Check for list= parameter first, then video ID
   const youtubePatterns = [
-    /https?:\/\/(?:www\.)?youtube\.com\/playlist\?list=([a-zA-Z0-9_-]+)/,
-    /https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/,
-    /https?:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/,
+    // Channel patterns (check these first as they're distinct)
     /https?:\/\/(?:www\.)?youtube\.com\/channel\/([a-zA-Z0-9_-]+)/,
-    /https?:\/\/(?:www\.)?youtube\.com\/@([a-zA-Z0-9_-]+)/
+    /https?:\/\/(?:www\.)?youtube\.com\/@([a-zA-Z0-9_-]+)/,
+    // Generic YouTube URL pattern (we'll parse parameters manually)
+    /https?:\/\/(?:www\.)?youtube\.com\/(watch|playlist)/,
+    /https?:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/
   ];
 
   // Check Spotify patterns
@@ -147,18 +148,38 @@ function analyzeUrl(url) {
     const match = url.match(pattern);
     if (match) {
       analysis.platform = 'youtube';
-      analysis.id = match[1];
       
-      // Determine type based on URL structure
-      if (url.includes('playlist')) {
-        analysis.type = 'playlist';
-      } else if (url.includes('channel') || url.includes('@')) {
+      // Handle channel URLs
+      if (url.includes('channel') || url.includes('@')) {
         analysis.type = 'channel';
-      } else {
-        analysis.type = 'video';
+        analysis.id = match[1];
+        return analysis;
       }
       
-      return analysis;
+      // Handle youtu.be short URLs
+      if (url.includes('youtu.be')) {
+        analysis.type = 'video';
+        analysis.id = match[1];
+        return analysis;
+      }
+      
+      // Handle youtube.com URLs - check for list= parameter first
+      const listMatch = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+      if (listMatch) {
+        analysis.type = 'playlist';
+        analysis.id = listMatch[1];
+        return analysis;
+      }
+      
+      // No list= found, look for v= parameter
+      const videoMatch = url.match(/[?&]v=([a-zA-Z0-9_-]+)/);
+      if (videoMatch) {
+        analysis.type = 'video';
+        analysis.id = videoMatch[1];
+        return analysis;
+      }
+      
+      // If we matched the pattern but couldn't extract ID, continue to next pattern
     }
   }
 

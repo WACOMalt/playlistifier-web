@@ -55,6 +55,26 @@
             margin-bottom: 5px;
         }
         
+        .version-link {
+            color: #000080;
+            text-decoration: underline;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .version-link:hover {
+            color: #0000ff;
+            text-decoration: underline;
+        }
+        
+        .version-link:visited {
+            color: #800080;
+        }
+        
+        .version-link:active {
+            color: #ff0000;
+        }
+        
         .changelog-date {
             color: #666;
             font-size: 11px;
@@ -112,14 +132,40 @@
             margin-bottom: 20px;
         }
         
-        .back-link a {
-            color: #000080;
-            text-decoration: underline;
+        .back-button {
+            background: #c0c0c0;
+            border: 2px outset #c0c0c0;
+            border-top: 2px solid #dfdfdf;
+            border-left: 2px solid #dfdfdf;
+            border-right: 2px solid #808080;
+            border-bottom: 2px solid #808080;
+            padding: 2px 8px;
+            font-family: 'MS Sans Serif', sans-serif;
             font-size: 11px;
+            color: #000;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            min-width: 75px;
+            text-align: center;
         }
         
-        .back-link a:visited {
-            color: #800080;
+        .back-button:hover {
+            background: #dfdfdf;
+        }
+        
+        .back-button:active {
+            border: 2px inset #c0c0c0;
+            border-top: 2px solid #808080;
+            border-left: 2px solid #808080;
+            border-right: 2px solid #dfdfdf;
+            border-bottom: 2px solid #dfdfdf;
+            background: #c0c0c0;
+        }
+        
+        .back-button:focus {
+            outline: 1px dotted #000;
+            outline-offset: -4px;
         }
     </style>
 </head>
@@ -132,7 +178,7 @@
 
         <main>
             <div class="back-link">
-                <a href="/">&larr; Back to Main Page</a>
+                <a href="/" class="back-button">&larr; Back to Main Page</a>
             </div>
             
             <div class="window">
@@ -171,7 +217,7 @@
         </main>
 
         <footer>
-            <p>Playlistifier Web v1.2.0</p>
+            <p>Playlistifier Web v1.3.0</p>
         </footer>
     </div>
 

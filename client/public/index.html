@@ -121,10 +121,16 @@
                         
                         <fieldset>
                             <legend>Download Options</legend>
-                            <label>
-                                <input type="checkbox" id="track-numbers-checkbox" checked>
-                                Include track numbers in filenames
-                            </label>
+                            <div class="download-options-row">
+                                <label>
+                                    <input type="checkbox" id="track-numbers-checkbox" checked>
+                                    Include track numbers in filenames
+                                </label>
+                                <label style="margin-left: 20px;">
+                                    Max concurrent downloads:
+                                    <input type="number" id="max-concurrent-downloads" min="1" max="20" value="8" style="width: 50px; margin-left: 5px;">
+                                </label>
+                            </div>
                         </fieldset>
                         
                         <div class="actions">
@@ -172,8 +178,8 @@
         </main>
 
         <footer>
-            <p>Playlistifier Web v1.2.0</p>
-            <p><a href="/changelog" style="color: #000080; text-decoration: underline; font-size: 11px;">Changelog & FAQ</a></p>
+            <p>Playlistifier Web v1.3.0</p>
+            <p><a href="/changelog" style="color: #4dd0e1; text-decoration: underline; font-size: 11px;">Changelog & FAQ</a></p>
         </footer>
     </div>
 

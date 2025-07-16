@@ -8,6 +8,7 @@ class PlaylistifierApp {
         this.authToken = null;
         this.rawUrlData = []; // Store raw URL data separately from display
         this.currentHeader = ''; // Store the header separately
+        this.maxConcurrentDownloads = 8; // Default concurrent downloads
         
         this.initializeApp();
     }
@@ -41,6 +42,9 @@ document.getElementById('download-btn').addEventListener('click', () => this.sav
         document.getElementById('save-urls-btn').addEventListener('click', () => this.saveUrlsToFile());
         document.getElementById('copy-urls-btn').addEventListener('click', () => this.copyUrlsToClipboard());
         document.getElementById('track-info-checkbox').addEventListener('change', () => this.toggleTrackInfo());
+        
+        // Concurrent downloads configuration
+        document.getElementById('max-concurrent-downloads').addEventListener('input', (e) => this.updateMaxConcurrentDownloads(e.target.value));
     }
 
     setupWebSocket() {
@@ -57,15 +61,13 @@ document.getElementById('download-btn').addEventListener('click', () => this.sav
         this.socket.on('track-progress', (data) => {
             const trackEl = document.querySelector(`[data-track-id="${data.trackId}"]`);
             if (trackEl) {
-                const progressBar = trackEl.querySelector('.progress-bar');
-                const progressText = trackEl.querySelector('.progress-text');
-
-                if (progressBar) {
-                    progressBar.style.width = `${data.progress}%`;
-                }
-
-                if (progressText) {
-                    progressText.textContent = `${data.progress}% - Downloading...`;
+                const statusEl = trackEl.querySelector('.track-status');
+                if (statusEl) {
+                    if (data.progress !== undefined) {
+                        statusEl.textContent = `Downloading ${data.progress}%`;
+                    } else {
+                        statusEl.textContent = 'Downloading...';
+                    }
                 }
             }
         });
@@ -284,7 +286,7 @@ async saveAllTracks() {
         downloadAllBtn.textContent = 'Downloading...';
 
         try {
-            await this.downloadTracksWithConcurrency(tracksToDownload, 3);
+            await this.downloadTracksWithStaggeredQueue(tracksToDownload, this.maxConcurrentDownloads, 1000);
             
             // Update button text after all downloads complete
             this.updateDownloadAllButton();
@@ -368,6 +370,92 @@ async saveAllTracks() {
             downloadAllBtn.disabled = false;
             this.updateDownloadAllButton();
         }
+    }
+
+    async downloadTracksWithStaggeredQueue(tracksToDownload, maxConcurrency = 5, staggerDelay = 2000) {
+        // First, set all tracks to "Queued for Download"
+        tracksToDownload.forEach(({ index }) => {
+            this.updateTrackStatus(index, 'queued-download', 'Queued for Download');
+        });
+        
+        const results = [];
+        const activeDownloads = new Set();
+        const scheduledDownloads = new Set(); // Track downloads that are scheduled but not yet started
+        let currentIndex = 0;
+        
+        const startNextDownload = async () => {
+            if (currentIndex >= tracksToDownload.length) {
+                return null;
+            }
+            
+            const { track, index } = tracksToDownload[currentIndex];
+            currentIndex++;
+            
+            const downloadPromise = this.downloadSingleTrackWithResult(String(index))
+                .then(result => {
+                    activeDownloads.delete(downloadPromise);
+                    return { trackIndex: index, success: true, result };
+                })
+                .catch(error => {
+                    activeDownloads.delete(downloadPromise);
+                    return { trackIndex: index, success: false, error };
+                });
+            
+            activeDownloads.add(downloadPromise);
+            results.push(downloadPromise);
+            
+            return downloadPromise;
+        };
+        
+        // Start initial downloads up to maxConcurrency with stagger delays
+        for (let i = 0; i < Math.min(maxConcurrency, tracksToDownload.length); i++) {
+            const timeoutId = setTimeout(async () => {
+                scheduledDownloads.delete(timeoutId);
+                await startNextDownload();
+            }, i * staggerDelay);
+            scheduledDownloads.add(timeoutId);
+        }
+        
+        // Wait for initial downloads to start, then handle remaining downloads
+        await new Promise(resolve => setTimeout(resolve, Math.min(maxConcurrency, tracksToDownload.length) * staggerDelay));
+        
+        // Continue processing remaining downloads with dynamic concurrency adjustment
+        while (currentIndex < tracksToDownload.length || activeDownloads.size > 0) {
+            // Get current concurrency limit (this allows for dynamic updates)
+            const currentMaxConcurrency = this.maxConcurrentDownloads;
+            
+            // Fill up available slots with new downloads up to the current limit
+            while (currentIndex < tracksToDownload.length && (activeDownloads.size + scheduledDownloads.size) < currentMaxConcurrency) {
+                // Start next download with stagger delay
+                const timeoutId = setTimeout(async () => {
+                    scheduledDownloads.delete(timeoutId);
+                    await startNextDownload();
+                }, staggerDelay);
+                scheduledDownloads.add(timeoutId);
+            }
+            
+            // If current concurrency exceeds the new limit, cancel scheduled downloads
+            if ((activeDownloads.size + scheduledDownloads.size) > currentMaxConcurrency) {
+                // Cancel excess scheduled downloads (but don't interrupt active ones)
+                const excessCount = (activeDownloads.size + scheduledDownloads.size) - currentMaxConcurrency;
+                const scheduledArray = Array.from(scheduledDownloads);
+                for (let i = 0; i < Math.min(excessCount, scheduledArray.length); i++) {
+                    clearTimeout(scheduledArray[i]);
+                    scheduledDownloads.delete(scheduledArray[i]);
+                }
+            }
+            
+            // If we have active downloads but no more to start, wait for completions
+            if (activeDownloads.size > 0) {
+                await Promise.race(Array.from(activeDownloads));
+            } else {
+                // No more downloads to start and none active
+                break;
+            }
+        }
+        
+        // Wait for all downloads to complete
+        return Promise.all(results);
     }
 
     async downloadTracksWithConcurrency(tracksToDownload, concurrencyLimit = 3) {
@@ -649,6 +737,20 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
         }
     }
 
+    updateMaxConcurrentDownloads(value) {
+        const numValue = parseInt(value);
+        if (isNaN(numValue) || numValue < 1 || numValue > 20) {
+            console.warn('Invalid concurrent downloads value:', value);
+            return;
+        }
+        
+        this.maxConcurrentDownloads = numValue;
+        console.log(`Max concurrent downloads updated to: ${this.maxConcurrentDownloads}`);
+        
+        // Show status message to user
+        this.showStatus(`Download concurrency set to ${this.maxConcurrentDownloads}`);
+    }
+
     // UI Helper Methods
     showError(message) {
         const errorEl = document.getElementById('url-error');
@@ -733,8 +835,8 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
         tracksList.innerHTML = tracks.map((track, index) => {
             // Check if track already has a URL (YouTube tracks)
             const hasUrl = track.url && track.url.trim() !== '';
-            const statusText = hasUrl ? 'Ready to download' : 'Searching for track...';
-            const statusClass = hasUrl ? 'found' : 'pending';
+            const statusText = hasUrl ? 'Found' : 'Queued for search';
+            const statusClass = hasUrl ? 'found' : 'queued-search';
             const buttonDisabled = hasUrl ? '' : 'disabled';
             
             // Get the best quality image/thumbnail
@@ -743,17 +845,21 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
                 // For Spotify tracks, use the medium size image (300x300)
                 const preferredImage = track.images.find(img => img.width === 300) || track.images[0];
                 imageUrl = preferredImage.url;
+                console.log(`Track ${index}: Using Spotify image:`, imageUrl);
             } else if (track.thumbnail) {
                 // For YouTube tracks, use the thumbnail
                 imageUrl = track.thumbnail;
+                console.log(`Track ${index}: Using YouTube thumbnail:`, imageUrl);
+            } else {
+                console.log(`Track ${index}: No image or thumbnail available`, track);
             }
             
             const imageHtml = imageUrl ? 
                 `<div class="track-artwork">
                     <img src="${imageUrl}" alt="${track.title}" class="track-image ${track.thumbnail ? 'youtube-thumbnail' : 'spotify-artwork'}" 
                          style="display:none;" 
-                         crossorigin="anonymous" 
-                         data-track-index="${index}" />
+                         data-track-index="${index}" 
+                         onerror="console.error('Image failed to load:', this.src); this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                     <div class="track-image-placeholder ${track.thumbnail ? 'youtube-thumbnail' : 'spotify-artwork'}" style="display:flex;">🎵</div>
                 </div>` : 
                 `<div class="track-artwork">
@@ -869,20 +975,98 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
         if (trackEl) {
             const statusEl = trackEl.querySelector('.track-status');
             const downloadBtn = trackEl.querySelector('.track-download-btn');
+            const saveBtn = trackEl.querySelector('.track-save-btn');
+            
             statusEl.textContent = statusText;
             statusEl.className = `track-status ${statusClass}`;
 
-            if (statusClass === 'downloading') {
-                statusEl.innerHTML = `<div class="progress-bar" style="width: 0%"></div><span class="progress-text">Downloading...</span>`;
-            } else if (statusClass === 'completed') {
-                downloadBtn.classList.remove('hidden');
-                downloadBtn.disabled = false;
-            } else if (statusClass === 'found') {
-                // Enable download button when track is found
-                downloadBtn.disabled = false;
-            } else if (statusClass === 'not-found' || statusClass === 'error') {
-                // Keep download button disabled for not found or error tracks
-                downloadBtn.disabled = true;
+            // Handle different status states
+            switch (statusClass) {
+                case 'queued-search':
+                    downloadBtn.disabled = true;
+                    saveBtn.classList.add('hidden');
+                    break;
+                case 'searching':
+                    downloadBtn.disabled = true;
+                    saveBtn.classList.add('hidden');
+                    break;
+                case 'found':
+                    downloadBtn.disabled = false;
+                    saveBtn.classList.add('hidden');
+                    break;
+                case 'queued-download':
+                    downloadBtn.disabled = true;
+                    saveBtn.classList.add('hidden');
+                    break;
+                case 'downloading':
+                    downloadBtn.disabled = true;
+                    downloadBtn.textContent = 'Downloading...';
+                    saveBtn.classList.add('hidden');
+                    statusEl.textContent = 'Downloading...';
+                    break;
+                case 'downloaded':
+                    downloadBtn.classList.add('hidden');
+                    saveBtn.classList.remove('hidden');
+                    break;
+                case 'saved':
+                    downloadBtn.classList.add('hidden');
+                    saveBtn.disabled = true;
+                    saveBtn.textContent = 'Saved';
+                    break;
+                case 'not-found':
+                case 'error':
+                    downloadBtn.disabled = true;
+                    saveBtn.classList.add('hidden');
+                    break;
+                case 'completed':
+                    downloadBtn.classList.remove('hidden');
+                    downloadBtn.disabled = false;
+                    break;
+                default:
+                    // For backwards compatibility
+                    if (statusClass === 'found') {
+                        downloadBtn.disabled = false;
+                    }
+                    break;
+            }
+        }
+    }
+
+    updateTrackThumbnail(trackIndex, thumbnailUrl) {
+        const trackEl = document.querySelector(`[data-track-id="${trackIndex}"]`);
+        if (trackEl && thumbnailUrl) {
+            const trackArtwork = trackEl.querySelector('.track-artwork');
+            if (trackArtwork) {
+                // Update the artwork with the new thumbnail
+                trackArtwork.innerHTML = `
+                    <img src="${thumbnailUrl}" alt="Track thumbnail" class="track-image youtube-thumbnail" 
+                         style="display:none;" 
+                         data-track-index="${trackIndex}" 
+                         onerror="console.error('Image failed to load:', this.src); this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                    <div class="track-image-placeholder youtube-thumbnail" style="display:flex;">🎵</div>
+                `;
+                
+                // Add event listeners for the new image
+                const img = trackArtwork.querySelector('.track-image');
+                if (img) {
+                    img.addEventListener('load', () => {
+                        console.log('Thumbnail loaded:', img.src);
+                        img.style.display = 'block';
+                        const placeholder = img.nextElementSibling;
+                        if (placeholder) {
+                            placeholder.style.display = 'none';
+                        }
+                    });
+                    
+                    img.addEventListener('error', () => {
+                        console.log('Thumbnail failed to load:', img.src);
+                        img.style.display = 'none';
+                        const placeholder = img.nextElementSibling;
+                        if (placeholder) {
+                            placeholder.style.display = 'flex';
+                        }
+                    });
+                }
             }
         }
     }
@@ -1079,13 +1263,13 @@ async performRealTimeVideoSearch(tracks, header) {
             progressDiv.innerHTML += `Searching ${i + 1}/${tracks.length}: ${query}\n`;
             
             try {
-                // Search for individual track
+                // Search for individual track using concurrent queue-based search
                 const response = await fetch('/api/search/youtube-urls', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ tracks: [track], concurrent: false }),
+                    body: JSON.stringify({ tracks: [track], concurrent: true }),
                 });
                 
                 const data = await response.json();
@@ -1101,8 +1285,12 @@ async performRealTimeVideoSearch(tracks, header) {
                         progressDiv.innerHTML += `✓ Found: ${result.url}\n`;
                         // Update track status to "Found"
                         this.updateTrackStatus(i, 'found', 'Found');
-                        // Update the track object with the found URL
+                        // Update the track object with the found URL and thumbnail
                         this.currentTracks[i].url = result.url;
+                        if (result.thumbnail) {
+                            this.currentTracks[i].thumbnail = result.thumbnail;
+                            this.updateTrackThumbnail(i, result.thumbnail);
+                        }
                     } else {
                         this.rawUrlData.push(trackTitle, '# Not found');
                         failed++;
@@ -1182,6 +1370,10 @@ async performRealTimeVideoSearch(tracks, header) {
                             progressDiv.innerHTML += `✓ Found: ${result.url}\n`;
                             this.updateTrackStatus(actualIndex, 'found', 'Found');
                             this.currentTracks[actualIndex].url = result.url;
+                            if (result.thumbnail) {
+                                this.currentTracks[actualIndex].thumbnail = result.thumbnail;
+                                this.updateTrackThumbnail(actualIndex, result.thumbnail);
+                            }
                         } else {
                             this.rawUrlData.push(trackTitle, '# Not found');
                             failed++;
