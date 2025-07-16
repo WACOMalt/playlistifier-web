@@ -3,6 +3,9 @@ const youtubeService = require('../services/youtube');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const { MAX_CONCURRENCY, PROCESS_DELAY, POLLING_INTERVAL } = require('../config/queue');
+
+// Queue configuration - shared with download service
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, '..', 'logs');
@@ -48,8 +51,8 @@ router.post('/youtube-urls', async (req, res) => {
     let failed = 0;
 
     if (concurrent && tracks.length > 1) {
-      // Queue-based search with controlled parallelism
-      const maxConcurrency = Math.min(5, tracks.length); // Limit to 5 concurrent searches
+      // Queue-based search with controlled parallelism - same structure as download service
+      const maxConcurrency = Math.min(MAX_CONCURRENCY, tracks.length);
       logToFile(`[${requestId}] Using queue-based search with ${maxConcurrency} parallel requests`);
       
       // Initialize queue tracking
@@ -60,7 +63,7 @@ router.post('/youtube-urls', async (req, res) => {
       // Function to process the next track search
       const processNextSearch = async () => {
         if (nextIndex >= tracks.length) return; // No more tracks to process
-        if (activeSearches.size >= maxConcurrency) return; // Max active limit reached
+        if (activeSearches.size >= maxConcurrency) return; // Max concurrent limit reached
         
         const currentIndex = nextIndex;
         const currentTrack = tracks[currentIndex];
@@ -114,8 +117,8 @@ router.post('/youtube-urls', async (req, res) => {
         
         // Check if we can start another search after a delay
         if (nextIndex < tracks.length) {
-          logToFile(`[${requestId}] Scheduling next search in 2s (remaining: ${tracks.length - nextIndex})`);
-          setTimeout(processNextSearch, 2000);
+          logToFile(`[${requestId}] Scheduling next search in ${PROCESS_DELAY}ms (remaining: ${tracks.length - nextIndex})`);
+          setTimeout(processNextSearch, PROCESS_DELAY);
         }
       };
       
@@ -125,12 +128,12 @@ router.post('/youtube-urls', async (req, res) => {
       // Start the initial search processes
       logToFile(`[${requestId}] Starting ${Math.min(maxConcurrency, tracks.length)} initial searches`);
       for (let i = 0; i < Math.min(maxConcurrency, tracks.length); i++) {
-        setTimeout(() => processNextSearch(), i * 2000); // Stagger initial searches by 2 seconds
+        setTimeout(() => processNextSearch(), i * PROCESS_DELAY); // Stagger initial searches
       }
       
       // Wait until all searches are complete
       while (nextIndex < tracks.length || activeSearches.size > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL));
         if (nextIndex < tracks.length || activeSearches.size > 0) {
           logToFile(`[${requestId}] Waiting... Next index: ${nextIndex}/${tracks.length}, Active: ${activeSearches.size}`);
         }
@@ -216,7 +219,7 @@ router.post('/youtube-urls', async (req, res) => {
 // Bulk search endpoint for better performance with large track lists
 router.post('/bulk-youtube-urls', async (req, res) => {
   try {
-    const { tracks, maxConcurrency = 5 } = req.body;
+    const { tracks, maxConcurrency = MAX_CONCURRENCY } = req.body;
     
     if (!tracks || !Array.isArray(tracks)) {
       return res.status(400).json({ error: 'Tracks array is required' });
@@ -224,15 +227,18 @@ router.post('/bulk-youtube-urls', async (req, res) => {
     
     console.log(`Bulk search: Processing ${tracks.length} tracks with a search queue`);
     
+    // Use same concurrency limit as download service
+    const actualConcurrency = Math.min(maxConcurrency, MAX_CONCURRENCY, tracks.length);
+    
     // Initialize queue and search status tracking
-    const results = [];
+    const results = new Array(tracks.length); // Pre-allocate like download service
     const activeSearches = new Set();
     let nextIndex = 0;
 
     // Function to process the next track search
     const processNextSearch = async () => {
       if (nextIndex >= tracks.length) return; // No more tracks to process
-      if (activeSearches.size >= maxConcurrency) return; // Max active limit reached
+      if (activeSearches.size >= actualConcurrency) return; // Max active limit reached
 
       const currentIndex = nextIndex;
       const currentTrack = tracks[currentIndex];
@@ -268,34 +274,34 @@ router.post('/bulk-youtube-urls', async (req, res) => {
 
       // Check if we can start another search after a delay
       if (nextIndex < tracks.length) {
-        setTimeout(processNextSearch, 2000);
+        setTimeout(processNextSearch, PROCESS_DELAY);
       }
     };
 
     // Start the initial search processes
-    for (let i = 0; i < Math.min(maxConcurrency, tracks.length); i++) {
-      setTimeout(() => processNextSearch(), i * 2000); // Stagger initial searches by 2 seconds
+    for (let i = 0; i < Math.min(actualConcurrency, tracks.length); i++) {
+      setTimeout(() => processNextSearch(), i * PROCESS_DELAY); // Stagger initial searches
     }
 
     // Wait until all searches are complete
     while (nextIndex < tracks.length || activeSearches.size > 0) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL));
     }
     
-    // Sort results by original index
-    results.sort((a, b) => a.index - b.index);
+    // Filter out undefined results and sort by index
+    const finalResults = results.filter(result => result !== undefined).sort((a, b) => a.index - b.index);
     
-    const found = results.filter(r => r.found).length;
-    const failed = results.filter(r => !r.found).length;
+    const found = finalResults.filter(r => r.found).length;
+    const failed = finalResults.filter(r => !r.found).length;
     
     res.json({
       success: true,
-      results: results,
+      results: finalResults,
       summary: {
         total: tracks.length,
         found: found,
         failed: failed,
-        concurrency: maxConcurrency
+        concurrency: actualConcurrency
       }
     });
     

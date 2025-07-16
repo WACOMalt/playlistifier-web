@@ -5,6 +5,7 @@ const fetch = require('node-fetch');
 const sizeOf = require('image-size');
 const youtubeService = require('./youtube');
 const setupManager = require('../utils/setup');
+const { MAX_CONCURRENCY, PROCESS_DELAY, POLLING_INTERVAL } = require('../config/queue');
 
 class DownloadService {
     constructor() {
@@ -85,7 +86,7 @@ class DownloadService {
 
     async processDownload(download, socketIo) {
         const { tracks, options } = download;
-        const maxConcurrency = 5; // Maximum 5 concurrent downloads
+        const maxConcurrency = MAX_CONCURRENCY; // Maximum concurrent downloads
         
         // Initialize queue tracking
         const activeDownloads = new Set();
@@ -154,18 +155,18 @@ class DownloadService {
             
             // Check if we can start another download after a delay
             if (nextIndex < tracks.length) {
-                setTimeout(processNextDownload, 2000);
+                setTimeout(processNextDownload, PROCESS_DELAY);
             }
         };
         
         // Start the initial download processes
         for (let i = 0; i < Math.min(maxConcurrency, tracks.length); i++) {
-            setTimeout(() => processNextDownload(), i * 2000); // Stagger initial downloads by 2 seconds
+            setTimeout(() => processNextDownload(), i * PROCESS_DELAY); // Stagger initial downloads
         }
         
         // Wait until all downloads are complete
         while (nextIndex < tracks.length || activeDownloads.size > 0) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL));
         }
         
         // Set results in the download object
