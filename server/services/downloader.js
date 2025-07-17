@@ -315,19 +315,30 @@ class DownloadService {
             args = [
                 '-i', filepath,
                 '-i', imagePath,
-                '-map', '0',
-                '-map', '1',
-                '-c', 'copy',
-                '-disposition:v', 'attached_pic',
+                '-map', '0:a',
+                '-map', '1:v',
+                '-c:a', 'copy',
+                '-c:v', 'mjpeg',  // Use JPEG codec for better Windows Media Player compatibility
+                '-disposition:v:0', 'attached_pic',
+                '-id3v2_version', '3',  // Use ID3v2.3 for better Windows Media Player compatibility
+                '-write_id3v1', '1',  // Also write ID3v1 tags for better compatibility
                 '-metadata', `title=${track.title}`,
                 '-metadata', `artist=${track.artist}`,
                 '-metadata', `album=${track.album || 'Unknown Album'}`,
+                '-y',  // Overwrite output file without asking
                 tempFile
             ];
+            
+            // Add album artist if available
+            if (track.album_artist) {
+                args.splice(-1, 0, '-metadata', `albumartist=${track.album_artist}`);
+                args.splice(-1, 0, '-metadata', `TPE2=${track.album_artist}`);
+            }
             
             // Add release year if available
             if (track.release_year) {
                 args.splice(-1, 0, '-metadata', `date=${track.release_year}`);
+                args.splice(-1, 0, '-metadata', `TYER=${track.release_year}`);
             }
         } else {
             args = [
@@ -338,6 +349,11 @@ class DownloadService {
                 '-codec', 'copy',
                 tempFile
             ];
+            
+            // Add album artist if available
+            if (track.album_artist) {
+                args.splice(-1, 0, '-metadata', `albumartist=${track.album_artist}`);
+            }
             
             // Add release year if available
             if (track.release_year) {
@@ -411,19 +427,30 @@ class DownloadService {
             args = [
                 '-i', filePath,
                 '-i', imagePath,
-                '-map', '0',
-                '-map', '1',
-                '-c', 'copy',
-                '-disposition:v', 'attached_pic',
+                '-map', '0:a',
+                '-map', '1:v',
+                '-c:a', 'copy',
+                '-c:v', 'mjpeg',  // Use JPEG codec for better Windows Media Player compatibility
+                '-disposition:v:0', 'attached_pic',
+                '-id3v2_version', '3',  // Use ID3v2.3 for better Windows Media Player compatibility
+                '-write_id3v1', '1',  // Also write ID3v1 tags for better compatibility
                 '-metadata', `title=${track.title}`,
                 '-metadata', `artist=${track.artist}`,
                 '-metadata', `album=${track.album || 'Unknown Album'}`,
+                '-y',  // Overwrite output file without asking
                 tempFile
             ];
+            
+            // Add album artist if available
+            if (track.album_artist) {
+                args.splice(-1, 0, '-metadata', `albumartist=${track.album_artist}`);
+                args.splice(-1, 0, '-metadata', `TPE2=${track.album_artist}`);
+            }
             
             // Add release year if available
             if (track.release_year) {
                 args.splice(-1, 0, '-metadata', `date=${track.release_year}`);
+                args.splice(-1, 0, '-metadata', `TYER=${track.release_year}`);
             }
         } else {
             args = [
@@ -434,6 +461,11 @@ class DownloadService {
                 '-codec', 'copy',
                 tempFile
             ];
+            
+            // Add album artist if available
+            if (track.album_artist) {
+                args.splice(-1, 0, '-metadata', `albumartist=${track.album_artist}`);
+            }
             
             // Add release year if available
             if (track.release_year) {

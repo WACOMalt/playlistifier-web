@@ -648,8 +648,8 @@ footer {
     /* Make both windows have similar heights by setting equal content heights */
     #youtube-urls {
         height: 345px;
-        min-height: 345px;
-        max-height: 345px;
+        min-height: 115px;
+        /* Remove max-height to allow resizing */
     }
     
     #tracks-list {

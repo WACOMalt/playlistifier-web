@@ -208,7 +208,8 @@ class SpotifyService {
                 album: {
                     name: album.name,
                     images: album.images,
-                    release_date: album.release_date
+                    release_date: album.release_date,
+                    artists: album.artists
                 }
             }));
             
@@ -256,6 +257,7 @@ class SpotifyService {
             title: track.name,
             artist: track.artists?.map(artist => artist.name).join(', ') || 'Unknown Artist',
             album: track.album?.name || 'Unknown Album',
+            album_artist: track.album?.artists?.map(artist => artist.name).join(', ') || null,
             release_year: releaseYear,
             duration_ms: track.duration_ms,
             duration: this.formatDuration(track.duration_ms),

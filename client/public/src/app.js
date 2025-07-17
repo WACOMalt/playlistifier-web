@@ -8,7 +8,7 @@ class PlaylistifierApp {
         this.authToken = null;
         this.rawUrlData = []; // Store raw URL data separately from display
         this.currentHeader = ''; // Store the header separately
-        this.maxConcurrentDownloads = 8; // Default concurrent downloads
+        this.maxConcurrentDownloads = 10; // Default concurrent downloads
         this.searchCompleted = false; // Track if all searches are complete
         this.tracksSearchStatus = new Map(); // Track individual track search status
         
@@ -34,7 +34,16 @@ class PlaylistifierApp {
 
         // Downloads
 document.getElementById('download-btn').addEventListener('click', () => this.saveAllTracks());
-        document.getElementById('download-to-folder-btn').addEventListener('click', () => this.downloadToFolder());
+        const downloadToFolderBtn = document.getElementById('download-to-folder-btn');
+        if (downloadToFolderBtn) {
+            console.log('Setting up download-to-folder-btn event listener');
+            downloadToFolderBtn.addEventListener('click', () => {
+                console.log('download-to-folder-btn clicked!');
+                this.downloadToFolder();
+            });
+        } else {
+            console.error('download-to-folder-btn element not found!');
+        }
         document.getElementById('cancel-btn').addEventListener('click', () => this.cancelDownload());
 
         // Navigation
@@ -506,6 +515,35 @@ async saveAllTracks() {
         }
     }
 
+    generateM3UPlaylist(sortedTrackIndices, trackMap, includeTrackNumbers, padding) {
+        const playlistName = this.currentMetadata?.name || this.currentMetadata?.title || 'Playlist';
+        
+        // M3U format with extended info
+        let m3uContent = '#EXTM3U\n';
+        m3uContent += `#PLAYLIST:${playlistName}\n\n`;
+        
+        sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
+            const downloadData = trackMap.get(trackIndex);
+            const track = downloadData.track;
+            const trackNumber = String(sequentialIndex + 1).padStart(padding, '0');
+            
+            // Sanitize for filename
+            const sanitizeFilename = (str) => {
+                return str.replace(/[<>:"/\\|*?]/g, '_').replace(/\s+/g, ' ').trim();
+            };
+            
+            const artist = sanitizeFilename(track.artist || 'Unknown Artist');
+            const title = sanitizeFilename(track.title || 'Unknown Title');
+            const filename = includeTrackNumbers ? `${trackNumber} - ${artist} - ${title}.mp3` : `${artist} - ${title}.mp3`;
+            
+            // Add extended info and file reference
+            m3uContent += `#EXTINF:-1,${track.artist || 'Unknown Artist'} - ${track.title || 'Unknown Title'}\n`;
+            m3uContent += `${filename}\n`;
+        });
+        
+        return m3uContent;
+    }
+
     async downloadAllAsZip() {
         console.log('downloadAllAsZip called');
         console.log('downloadedBlobs size:', this.downloadedBlobs ? this.downloadedBlobs.size : 'undefined');
@@ -578,9 +616,17 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
             zip.file(filename, downloadData.blob);
         });
         
-        // Add playlist file with YouTube URLs
+        // Add M3U playlist file
         const playlistName = this.currentMetadata?.name || this.currentMetadata?.title || 'Playlist';
         const sanitizedPlaylistName = playlistName.replace(/[<>:"/\\|*?]/g, '_');
+        const includeTrackNumbers = document.getElementById('track-numbers-checkbox').checked;
+        const m3uContent = this.generateM3UPlaylist(sortedTrackIndices, trackMap, includeTrackNumbers, padding);
+        const m3uFilename = `${sanitizedPlaylistName}.m3u`;
+        
+        console.log(`Adding M3U playlist file: ${m3uFilename}`);
+        zip.file(m3uFilename, m3uContent);
+        
+        // Add playlist file with YouTube URLs
         const playlistFilename = `${sanitizedPlaylistName} - songs.txt`;
         
         // Get YouTube URLs content
@@ -715,6 +761,7 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
             
             // Update the download all button text
             this.updateDownloadAllButton();
+            this.updateDownloadToFolderButton();
 
         } catch (error) {
             this.updateTrackStatus(trackId, 'error', 'Error');
@@ -765,6 +812,38 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
             downloadAllBtn.disabled = false; // Enable button to save zip
         }
     }
+    
+    updateDownloadToFolderButton() {
+        const downloadToFolderBtn = document.getElementById('download-to-folder-btn');
+        if (!downloadToFolderBtn) return;
+        
+        const totalTracks = this.currentTracks.length;
+        const downloadedCount = this.downloadedTracks.size;
+        
+        // Check if File System Access API is supported
+        if (!('showDirectoryPicker' in window)) {
+            downloadToFolderBtn.disabled = true;
+            downloadToFolderBtn.title = 'This feature requires Chrome 86+, Edge 86+, or Opera 72+. Not supported in Firefox or Safari.';
+            downloadToFolderBtn.style.opacity = '0.6';
+            return;
+        }
+        
+        // Check if all searches are complete
+        if (!this.searchCompleted) {
+            downloadToFolderBtn.disabled = true;
+            downloadToFolderBtn.title = 'Waiting for searches to complete...';
+            return;
+        }
+        
+        // Check if all tracks are downloaded
+        if (downloadedCount < totalTracks) {
+            downloadToFolderBtn.disabled = true;
+            downloadToFolderBtn.title = `Download all tracks first (${downloadedCount}/${totalTracks} completed)`;
+        } else {
+            downloadToFolderBtn.disabled = false;
+            downloadToFolderBtn.title = 'Save files directly to a folder on your computer';
+        }
+    }
 
     updateMaxConcurrentDownloads(value) {
         const numValue = parseInt(value);
@@ -799,22 +878,29 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
     }
     
     async downloadToFolder() {
+        console.log('downloadToFolder called');
+        
         if (!this.currentTracks.length) {
+            console.log('No tracks to download');
             this.showError('No tracks to download');
             return;
         }
         
         // Check if all searches are complete before allowing download
         if (!this.searchCompleted) {
+            console.log('Search not completed');
             this.showError('Cannot download tracks while searches are still in progress. Please wait for all searches to complete.');
             return;
         }
         
         // Check if we have any downloaded tracks
         if (!this.downloadedBlobs || this.downloadedBlobs.size === 0) {
+            console.log('No downloaded blobs');
             this.showError('No tracks have been downloaded yet. Please download tracks first.');
             return;
         }
+        
+        console.log('All checks passed, starting download to folder');
         
         const downloadToFolderBtn = document.getElementById('download-to-folder-btn');
         const originalText = downloadToFolderBtn.textContent;
@@ -824,7 +910,24 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
             downloadToFolderBtn.disabled = true;
             downloadToFolderBtn.textContent = 'Select folder...';
             
+            console.log('About to show directory picker');
             const dirHandle = await window.showDirectoryPicker();
+            console.log('Directory picker returned:', dirHandle);
+            
+            downloadToFolderBtn.textContent = 'Creating playlist folder...';
+            
+            // Create a subfolder with the playlist name
+            const playlistName = this.currentMetadata?.name || this.currentMetadata?.title || 'Playlist';
+            const sanitizedPlaylistName = playlistName.replace(/[<>:"/\\|*?]/g, '_').replace(/\s+/g, ' ').trim();
+            
+            let playlistDirHandle;
+            try {
+                playlistDirHandle = await dirHandle.getDirectoryHandle(sanitizedPlaylistName, { create: true });
+                console.log(`Created playlist folder: ${sanitizedPlaylistName}`);
+            } catch (error) {
+                console.error('Failed to create playlist folder:', error);
+                throw new Error(`Failed to create playlist folder: ${error.message}`);
+            }
             
             downloadToFolderBtn.textContent = 'Saving files...';
             
@@ -861,8 +964,8 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
                 const filename = includeTrackNumbers ? `${trackNumber} - ${artist} - ${title}.mp3` : `${artist} - ${title}.mp3`;
                 
                 try {
-                    // Create file in selected directory
-                    const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+                    // Create file in playlist subfolder
+                    const fileHandle = await playlistDirHandle.getFileHandle(filename, { create: true });
                     const writable = await fileHandle.createWritable();
                     await writable.write(downloadData.blob);
                     await writable.close();
@@ -875,7 +978,24 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
                 }
             }
             
-            // Also save the playlist file with YouTube URLs
+            // Also save the M3U playlist file in the playlist subfolder
+            try {
+                const playlistName = this.currentMetadata?.name || this.currentMetadata?.title || 'Playlist';
+                const sanitizedPlaylistName = playlistName.replace(/[<>:"/\\|*?]/g, '_');
+                const includeTrackNumbers = document.getElementById('track-numbers-checkbox').checked;
+                const m3uContent = this.generateM3UPlaylist(sortedTrackIndices, trackMap, includeTrackNumbers, padding);
+                const m3uFilename = `${sanitizedPlaylistName}.m3u`;
+                
+                const m3uFileHandle = await playlistDirHandle.getFileHandle(m3uFilename, { create: true });
+                const m3uWritable = await m3uFileHandle.createWritable();
+                await m3uWritable.write(m3uContent);
+                await m3uWritable.close();
+                console.log(`Saved M3U playlist file: ${m3uFilename}`);
+            } catch (error) {
+                console.error('Failed to save M3U playlist file:', error);
+            }
+            
+            // Also save the playlist file with YouTube URLs in the playlist subfolder
             try {
                 const playlistName = this.currentMetadata?.name || this.currentMetadata?.title || 'Playlist';
                 const sanitizedPlaylistName = playlistName.replace(/[<>:"/\\|*?]/g, '_');
@@ -885,7 +1005,7 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
                 const youtubeUrlsContent = youtubeUrlsTextarea ? youtubeUrlsTextarea.value : '';
                 
                 if (youtubeUrlsContent.trim()) {
-                    const playlistFileHandle = await dirHandle.getFileHandle(playlistFilename, { create: true });
+                    const playlistFileHandle = await playlistDirHandle.getFileHandle(playlistFilename, { create: true });
                     const playlistWritable = await playlistFileHandle.createWritable();
                     await playlistWritable.write(youtubeUrlsContent);
                     await playlistWritable.close();
@@ -903,6 +1023,7 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
             }
             
         } catch (error) {
+            console.error('Error in downloadToFolder:', error);
             if (error.name === 'AbortError') {
                 console.log('User cancelled folder selection');
                 this.showStatus('Folder selection cancelled');
@@ -1008,6 +1129,7 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
         
         // Update download button state immediately
         this.updateDownloadAllButton();
+        this.updateDownloadToFolderButton();
         
         // Initial display - will be updated by updateTracksInfo
         this.updateTracksInfo();
@@ -1229,35 +1351,45 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
         if (trackEl && thumbnailUrl) {
             const trackArtwork = trackEl.querySelector('.track-artwork');
             if (trackArtwork) {
-                // Update the artwork with the new thumbnail
-                trackArtwork.innerHTML = `
-                    <img src="${thumbnailUrl}" alt="Track thumbnail" class="track-image youtube-thumbnail" 
-                         style="display:none;" 
-                         data-track-index="${trackIndex}" 
-                         onerror="console.error('Image failed to load:', this.src); this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                    <div class="track-image-placeholder youtube-thumbnail" style="display:flex;">🎵</div>
-                `;
+                // Check if track already has Spotify artwork - if so, don't replace it
+                const existingImg = trackArtwork.querySelector('.track-image');
+                if (existingImg && existingImg.classList.contains('spotify-artwork')) {
+                    console.log(`Track ${trackIndex}: Preserving Spotify artwork over YouTube thumbnail`);
+                    return; // Don't replace Spotify artwork with YouTube thumbnail
+                }
                 
-                // Add event listeners for the new image
-                const img = trackArtwork.querySelector('.track-image');
-                if (img) {
-                    img.addEventListener('load', () => {
-                        console.log('Thumbnail loaded:', img.src);
-                        img.style.display = 'block';
-                        const placeholder = img.nextElementSibling;
-                        if (placeholder) {
-                            placeholder.style.display = 'none';
-                        }
-                    });
+                // Only update if there's no existing image or if it's a YouTube thumbnail
+                if (!existingImg || existingImg.classList.contains('youtube-thumbnail')) {
+                    // Update the artwork with the new thumbnail
+                    trackArtwork.innerHTML = `
+                        <img src="${thumbnailUrl}" alt="Track thumbnail" class="track-image youtube-thumbnail" 
+                             style="display:none;" 
+                             data-track-index="${trackIndex}" 
+                             onerror="console.error('Image failed to load:', this.src); this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                        <div class="track-image-placeholder youtube-thumbnail" style="display:flex;">🎵</div>
+                    `;
                     
-                    img.addEventListener('error', () => {
-                        console.log('Thumbnail failed to load:', img.src);
-                        img.style.display = 'none';
-                        const placeholder = img.nextElementSibling;
-                        if (placeholder) {
-                            placeholder.style.display = 'flex';
-                        }
-                    });
+                    // Add event listeners for the new image
+                    const img = trackArtwork.querySelector('.track-image');
+                    if (img) {
+                        img.addEventListener('load', () => {
+                            console.log('Thumbnail loaded:', img.src);
+                            img.style.display = 'block';
+                            const placeholder = img.nextElementSibling;
+                            if (placeholder) {
+                                placeholder.style.display = 'none';
+                            }
+                        });
+                        
+                        img.addEventListener('error', () => {
+                            console.log('Thumbnail failed to load:', img.src);
+                            img.style.display = 'none';
+                            const placeholder = img.nextElementSibling;
+                            if (placeholder) {
+                                placeholder.style.display = 'flex';
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -1389,29 +1521,13 @@ async performRealTimeVideoSearch(tracks, header) {
         this.rawUrlData = [];
         
         try {
-            // Always use concurrent search if there are multiple tracks
-            if (tracks.length > 1) {
-                // Use queue-based concurrent search with up to 5 simultaneous searches
-                progressDiv.innerHTML = `Searching ${tracks.length} tracks (up to 5 simultaneous searches)...\n`;
-                
-                try {
-                    const result = await this.performBatchedSearch(tracks, progressDiv, 5);
-                    found = result.found;
-                    failed = result.failed;
-                } catch (error) {
-                    console.error('Queue-based search failed, falling back to sequential:', error);
-                    progressDiv.innerHTML += `Queue-based search failed, falling back to sequential...\n`;
-                    // Fall back to sequential search
-                    const result = await this.performSequentialSearch(tracks, progressDiv);
-                    found = result.found;
-                    failed = result.failed;
-                }
-            } else {
-                // Use sequential search for single track
-                const result = await this.performSequentialSearch(tracks, progressDiv);
-                found = result.found;
-                failed = result.failed;
-            }
+            // Use staggered concurrent search based on max concurrent downloads setting
+            const maxConcurrent = this.maxConcurrentDownloads;
+            progressDiv.innerHTML = `Searching ${tracks.length} tracks (max ${maxConcurrent} concurrent, 1 new search per second)...\n`;
+            
+            const result = await this.performStaggeredConcurrentSearch(tracks, progressDiv, maxConcurrent);
+            found = result.found;
+            failed = result.failed;
             
             // Final summary
             progressDiv.innerHTML += `\nSearch completed!\n`;
@@ -1513,6 +1629,138 @@ async performRealTimeVideoSearch(tracks, header) {
         return { found, failed };
     }
     
+    async performStaggeredConcurrentSearch(tracks, progressDiv, maxConcurrency = 5) {
+        let found = 0;
+        let failed = 0;
+        
+        // Initialize all tracks as queued for search
+        tracks.forEach((track, index) => {
+            this.updateTrackStatus(index, 'queued-search', 'Queued for search');
+        });
+        
+        progressDiv.innerHTML += `\nStarting staggered concurrent search with up to ${maxConcurrency} simultaneous searches...\n`;
+        
+        const results = [];
+        const activeSearches = new Set();
+        const scheduledSearches = new Set();
+        let currentIndex = 0;
+        
+        const startNextSearch = async () => {
+            if (currentIndex >= tracks.length) {
+                return null;
+            }
+            
+            const trackIndex = currentIndex;
+            const track = tracks[trackIndex];
+            currentIndex++;
+            
+            // Update status to searching
+            this.updateTrackStatus(trackIndex, 'searching', 'Searching...');
+            
+            const searchPromise = this.performSingleTrackSearch(track, trackIndex)
+                .then(result => {
+                    activeSearches.delete(searchPromise);
+                    
+                    // Update track status immediately based on result
+                    if (result.success && result.found && result.url) {
+                        this.updateTrackStatus(trackIndex, 'found', 'Found');
+                        found++;
+                        
+                        // Update the track object with the found URL and thumbnail
+                        this.currentTracks[trackIndex].url = result.url;
+                        if (result.thumbnail) {
+                            this.currentTracks[trackIndex].thumbnail = result.thumbnail;
+                            this.updateTrackThumbnail(trackIndex, result.thumbnail);
+                        }
+                    } else {
+                        this.updateTrackStatus(trackIndex, result.error ? 'error' : 'not-found', result.error ? 'Error' : 'Not Found');
+                        failed++;
+                    }
+                    
+                    // Always rebuild the entire URLs list to maintain correct order
+                    this.rebuildUrlsList();
+                    
+                    // Scroll to bottom of textarea
+                    const youtubeUrlsTextarea = document.getElementById('youtube-urls');
+                    youtubeUrlsTextarea.scrollTop = youtubeUrlsTextarea.scrollHeight;
+                    
+                    return result;
+                })
+                .catch(error => {
+                    activeSearches.delete(searchPromise);
+                    this.updateTrackStatus(trackIndex, 'error', 'Error');
+                    failed++;
+                    
+                    // Always rebuild the entire URLs list to maintain correct order
+                    this.rebuildUrlsList();
+                    
+                    return { trackIndex, success: false, error };
+                });
+            
+            activeSearches.add(searchPromise);
+            results.push(searchPromise);
+            
+            return searchPromise;
+        };
+        
+        // Start initial searches up to maxConcurrency with 1-second staggering
+        for (let i = 0; i < Math.min(maxConcurrency, tracks.length); i++) {
+            const timeoutId = setTimeout(async () => {
+                scheduledSearches.delete(timeoutId);
+                await startNextSearch();
+            }, i * 1000); // 1 second delay between each search
+            scheduledSearches.add(timeoutId);
+        }
+        
+        // Wait for initial searches to start
+        await new Promise(resolve => setTimeout(resolve, Math.min(maxConcurrency, tracks.length) * 1000));
+        
+        // Continue processing remaining searches with dynamic concurrency management
+        while (currentIndex < tracks.length || activeSearches.size > 0) {
+            // Get current concurrency limit (this allows for dynamic updates)
+            const currentMaxConcurrency = this.maxConcurrentDownloads; // Use same setting as downloads
+            
+            // Fill up available slots with new searches up to current limit
+            while (currentIndex < tracks.length && (activeSearches.size + scheduledSearches.size) < currentMaxConcurrency) {
+                const timeoutId = setTimeout(async () => {
+                    scheduledSearches.delete(timeoutId);
+                    await startNextSearch();
+                }, 1000); // 1 second delay for each new search
+                scheduledSearches.add(timeoutId);
+            }
+            
+            // If current concurrency exceeds the new limit, cancel scheduled searches
+            if ((activeSearches.size + scheduledSearches.size) > currentMaxConcurrency) {
+                const excessCount = (activeSearches.size + scheduledSearches.size) - currentMaxConcurrency;
+                const scheduledArray = Array.from(scheduledSearches);
+                for (let i = 0; i < Math.min(excessCount, scheduledArray.length); i++) {
+                    clearTimeout(scheduledArray[i]);
+                    scheduledSearches.delete(scheduledArray[i]);
+                }
+            }
+            
+            // Wait for at least one search to complete if we have active searches
+            if (activeSearches.size > 0) {
+                await Promise.race(Array.from(activeSearches));
+            } else {
+                // No active searches, wait a bit before checking again
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        
+        // Wait for all searches to complete
+        await Promise.all(results);
+        
+        // Final rebuild of the URLs list
+        this.rebuildUrlsList();
+        
+        // Scroll to bottom of textarea
+        const youtubeUrlsTextarea = document.getElementById('youtube-urls');
+        youtubeUrlsTextarea.scrollTop = youtubeUrlsTextarea.scrollHeight;
+        
+        return { found, failed };
+    }
+    
     async performBatchedSearch(tracks, progressDiv, concurrency = 5) {
         let found = 0;
         let failed = 0;
@@ -1587,12 +1835,12 @@ async performRealTimeVideoSearch(tracks, header) {
             return searchPromise;
         };
         
-        // Start searches with staggered initialization - start with 1, then add more gradually
+        // Start searches with proper staggering - start with 1, then add more gradually
         let searchesStarted = 0;
         const maxSearches = Math.min(concurrency, tracks.length);
         
         // Start first search immediately
-        if (searchesStarted < maxSearches) {
+        if (searchesStarted < maxSearches && currentIndex < tracks.length) {
             startNextSearch();
             searchesStarted++;
         }
@@ -1609,14 +1857,20 @@ async performRealTimeVideoSearch(tracks, header) {
         
         // Process remaining searches as active ones complete
         while (currentIndex < tracks.length || activeSearches.size > 0) {
-            // Fill up available slots with new searches
-            while (currentIndex < tracks.length && activeSearches.size < concurrency) {
-                startNextSearch(); // Don't await here, let them run concurrently
+            // Only fill available slots if we've finished the staggered initialization
+            if (searchesStarted >= maxSearches) {
+                // Fill up available slots with new searches
+                while (currentIndex < tracks.length && activeSearches.size < concurrency) {
+                    startNextSearch(); // Don't await here, let them run concurrently
+                }
             }
             
             // Wait for at least one search to complete
             if (activeSearches.size > 0) {
                 await Promise.race(Array.from(activeSearches.keys()));
+            } else if (currentIndex >= tracks.length) {
+                // No more searches to start and none active
+                break;
             }
         }
         
@@ -1833,11 +2087,12 @@ async searchVideoUrls() {
         const wasCompleted = this.searchCompleted;
         this.searchCompleted = allComplete;
         
-        // Update download button if completion status changed
-        if (wasCompleted !== this.searchCompleted) {
-            this.updateDownloadAllButton();
-            
-        // Show status message when search completes
+            // Update download button if completion status changed
+            if (wasCompleted !== this.searchCompleted) {
+                this.updateDownloadAllButton();
+                this.updateDownloadToFolderButton();
+                
+            // Show status message when search completes
             if (this.searchCompleted) {
                 const foundCount = Array.from(this.tracksSearchStatus.values()).filter(status => status === 'found').length;
                 const totalCount = this.currentTracks.length;
