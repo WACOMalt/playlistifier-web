@@ -361,7 +361,7 @@ fieldset label {
     margin-bottom: 11.5px;
     font-family: 'Courier New', monospace;
     font-size: 12.65px;
-    max-height: 172.5px;
+    height: calc(7 * 1.4 * 12.65px + 11.5px); /* 7 lines * line-height * font-size + padding */
     overflow-y: auto;
     white-space: pre-wrap;
 }

@@ -19,6 +19,7 @@ class PlaylistifierApp {
         this.setupEventListeners();
         this.setupWebSocket();
         this.checkAuthStatus();
+        this.checkFileSystemAccessSupport();
     }
 
     setupEventListeners() {
@@ -33,6 +34,7 @@ class PlaylistifierApp {
 
         // Downloads
 document.getElementById('download-btn').addEventListener('click', () => this.saveAllTracks());
+        document.getElementById('download-to-folder-btn').addEventListener('click', () => this.downloadToFolder());
         document.getElementById('cancel-btn').addEventListener('click', () => this.cancelDownload());
 
         // Navigation
@@ -777,6 +779,142 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
         // Show status message to user
         this.showStatus(`Download concurrency set to ${this.maxConcurrentDownloads}`);
     }
+    
+    checkFileSystemAccessSupport() {
+        const downloadToFolderBtn = document.getElementById('download-to-folder-btn');
+        if (!downloadToFolderBtn) return;
+        
+        // Check if the File System Access API is supported
+        if ('showDirectoryPicker' in window) {
+            console.log('File System Access API is supported');
+            downloadToFolderBtn.disabled = false;
+            downloadToFolderBtn.title = 'Save files directly to a folder on your computer';
+        } else {
+            console.log('File System Access API is not supported in this browser');
+            downloadToFolderBtn.disabled = true;
+            downloadToFolderBtn.title = 'This feature requires Chrome 86+, Edge 86+, or Opera 72+. Not supported in Firefox or Safari.';
+            // Add a visual indicator that it's not supported
+            downloadToFolderBtn.style.opacity = '0.6';
+        }
+    }
+    
+    async downloadToFolder() {
+        if (!this.currentTracks.length) {
+            this.showError('No tracks to download');
+            return;
+        }
+        
+        // Check if all searches are complete before allowing download
+        if (!this.searchCompleted) {
+            this.showError('Cannot download tracks while searches are still in progress. Please wait for all searches to complete.');
+            return;
+        }
+        
+        // Check if we have any downloaded tracks
+        if (!this.downloadedBlobs || this.downloadedBlobs.size === 0) {
+            this.showError('No tracks have been downloaded yet. Please download tracks first.');
+            return;
+        }
+        
+        const downloadToFolderBtn = document.getElementById('download-to-folder-btn');
+        const originalText = downloadToFolderBtn.textContent;
+        
+        try {
+            // Show directory picker
+            downloadToFolderBtn.disabled = true;
+            downloadToFolderBtn.textContent = 'Select folder...';
+            
+            const dirHandle = await window.showDirectoryPicker();
+            
+            downloadToFolderBtn.textContent = 'Saving files...';
+            
+            // Calculate padding for track numbers
+            const totalTracks = this.currentTracks.length;
+            const padding = Math.max(2, totalTracks.toString().length);
+            
+            // Create a map to store tracks with their indices for proper ordering
+            const trackMap = new Map();
+            for (const [trackId, downloadData] of this.downloadedBlobs) {
+                const trackIndex = parseInt(trackId);
+                trackMap.set(trackIndex, downloadData);
+            }
+            
+            // Sort tracks by index and save to folder with proper numbering
+            const sortedTrackIndices = Array.from(trackMap.keys()).sort((a, b) => a - b);
+            
+            let savedCount = 0;
+            let errorCount = 0;
+            
+            for (const [sequentialIndex, trackIndex] of sortedTrackIndices.entries()) {
+                const downloadData = trackMap.get(trackIndex);
+                const includeTrackNumbers = document.getElementById('track-numbers-checkbox').checked;
+                const trackNumber = String(sequentialIndex + 1).padStart(padding, '0');
+                
+                // Create filename
+                const sanitizeFilename = (str) => {
+                    return str.replace(/[<>:"/\\|*?]/g, '_').replace(/\s+/g, ' ').trim();
+                };
+                
+                const track = downloadData.track;
+                const artist = sanitizeFilename(track.artist || 'Unknown Artist');
+                const title = sanitizeFilename(track.title || 'Unknown Title');
+                const filename = includeTrackNumbers ? `${trackNumber} - ${artist} - ${title}.mp3` : `${artist} - ${title}.mp3`;
+                
+                try {
+                    // Create file in selected directory
+                    const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(downloadData.blob);
+                    await writable.close();
+                    
+                    savedCount++;
+                    console.log(`Saved: ${filename}`);
+                } catch (error) {
+                    console.error(`Failed to save ${filename}:`, error);
+                    errorCount++;
+                }
+            }
+            
+            // Also save the playlist file with YouTube URLs
+            try {
+                const playlistName = this.currentMetadata?.name || this.currentMetadata?.title || 'Playlist';
+                const sanitizedPlaylistName = playlistName.replace(/[<>:"/\\|*?]/g, '_');
+                const playlistFilename = `${sanitizedPlaylistName} - songs.txt`;
+                
+                const youtubeUrlsTextarea = document.getElementById('youtube-urls');
+                const youtubeUrlsContent = youtubeUrlsTextarea ? youtubeUrlsTextarea.value : '';
+                
+                if (youtubeUrlsContent.trim()) {
+                    const playlistFileHandle = await dirHandle.getFileHandle(playlistFilename, { create: true });
+                    const playlistWritable = await playlistFileHandle.createWritable();
+                    await playlistWritable.write(youtubeUrlsContent);
+                    await playlistWritable.close();
+                    console.log(`Saved playlist file: ${playlistFilename}`);
+                }
+            } catch (error) {
+                console.error('Failed to save playlist file:', error);
+            }
+            
+            // Show success message
+            if (errorCount === 0) {
+                this.showStatus(`Successfully saved ${savedCount} files to the selected folder!`);
+            } else {
+                this.showStatus(`Saved ${savedCount} files, ${errorCount} failed. Check console for details.`);
+            }
+            
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('User cancelled folder selection');
+                this.showStatus('Folder selection cancelled');
+            } else {
+                console.error('Download to folder failed:', error);
+                this.showError(`Failed to save files: ${error.message}`);
+            }
+        } finally {
+            downloadToFolderBtn.disabled = false;
+            downloadToFolderBtn.textContent = originalText;
+        }
+    }
 
     // UI Helper Methods
     showError(message) {
@@ -1152,7 +1290,7 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
             // Update textarea based on checkbox state
             this.toggleTrackInfo();
         } else {
-            // For Spotify, automatically search for YouTube URLs with real-time updates
+            // For Spotify, automatically search for YouTube URLs with staggered queue initialization
             await this.performRealTimeVideoSearch(tracks, header);
         }
     }
@@ -1334,7 +1472,6 @@ async performRealTimeVideoSearch(tracks, header) {
                     const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
                     
                     if (result.found && result.url) {
-                        this.rawUrlData.push(trackTitle, result.url);
                         found++;
                         progressDiv.innerHTML += `✓ Found: ${result.url}\n`;
                         // Update track status to "Found"
@@ -1346,16 +1483,12 @@ async performRealTimeVideoSearch(tracks, header) {
                             this.updateTrackThumbnail(i, result.thumbnail);
                         }
                     } else {
-                        this.rawUrlData.push(trackTitle, '# Not found');
                         failed++;
                         progressDiv.innerHTML += `✗ Not found: ${query}\n`;
                         // Update track status to "Not Found"
                         this.updateTrackStatus(i, 'not-found', 'Not Found');
                     }
                 } else {
-                    const trackNumber = String(i + 1).padStart(2, '0');
-                    const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
-                    this.rawUrlData.push(trackTitle, '# Not found');
                     failed++;
                     progressDiv.innerHTML += `✗ Search failed: ${query}\n`;
                     // Update track status to "Not Found"
@@ -1363,17 +1496,14 @@ async performRealTimeVideoSearch(tracks, header) {
                 }
             } catch (error) {
                 console.error(`Search failed for track ${i}:`, error);
-                const trackNumber = String(i + 1).padStart(2, '0');
-                const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
-                this.rawUrlData.push(trackTitle, '# Error');
                 failed++;
                 progressDiv.innerHTML += `✗ Error: ${query} - ${error.message}\n`;
                 // Update track status to "Error"
                 this.updateTrackStatus(i, 'error', 'Error');
             }
             
-            // Update the textarea with current results based on checkbox state
-            this.toggleTrackInfo();
+            // Rebuild the entire URLs list to maintain correct order
+            this.rebuildUrlsList();
             
             // Scroll to bottom of textarea
             const youtubeUrlsTextarea = document.getElementById('youtube-urls');
@@ -1387,73 +1517,187 @@ async performRealTimeVideoSearch(tracks, header) {
         let found = 0;
         let failed = 0;
         
-        // Update all tracks to searching status initially
+        // Initialize all tracks as queued for search
         tracks.forEach((track, index) => {
-            this.updateTrackStatus(index, 'searching', 'Searching...');
+            this.updateTrackStatus(index, 'queued-search', 'Queued for search');
         });
         
         progressDiv.innerHTML += `\nStarting queue-based search with up to ${concurrency} simultaneous searches...\n`;
         
+        // Implement client-side queue management that mirrors the download logic
+        const results = [];
+        const activeSearches = new Map(); // Use Map to track promise -> trackIndex
+        let currentIndex = 0;
+        
+        const startNextSearch = async () => {
+            if (currentIndex >= tracks.length) {
+                return null;
+            }
+            
+            const trackIndex = currentIndex;
+            const track = tracks[trackIndex];
+            currentIndex++;
+            
+            // Update status to searching
+            this.updateTrackStatus(trackIndex, 'searching', 'Searching...');
+            
+            const searchPromise = this.performSingleTrackSearch(track, trackIndex)
+                .then(result => {
+                    activeSearches.delete(searchPromise);
+                    
+                    // Update track status immediately based on result
+                    if (result.success && result.found && result.url) {
+                        this.updateTrackStatus(trackIndex, 'found', 'Found');
+                        found++;
+                        
+                        // Update the track object with the found URL and thumbnail
+                        this.currentTracks[trackIndex].url = result.url;
+                        if (result.thumbnail) {
+                            this.currentTracks[trackIndex].thumbnail = result.thumbnail;
+                            this.updateTrackThumbnail(trackIndex, result.thumbnail);
+                        }
+                    } else {
+                        this.updateTrackStatus(trackIndex, result.error ? 'error' : 'not-found', result.error ? 'Error' : 'Not Found');
+                        failed++;
+                    }
+                    
+                    // Always rebuild the entire URLs list to maintain correct order
+                    this.rebuildUrlsList();
+                    
+                    // Scroll to bottom of textarea
+                    const youtubeUrlsTextarea = document.getElementById('youtube-urls');
+                    youtubeUrlsTextarea.scrollTop = youtubeUrlsTextarea.scrollHeight;
+                    
+                    return result;
+                })
+                .catch(error => {
+                    activeSearches.delete(searchPromise);
+                    this.updateTrackStatus(trackIndex, 'error', 'Error');
+                    failed++;
+                    
+                    // Always rebuild the entire URLs list to maintain correct order
+                    this.rebuildUrlsList();
+                    
+                    return { trackIndex, success: false, error };
+                });
+            
+            activeSearches.set(searchPromise, trackIndex);
+            results.push(searchPromise);
+            
+            return searchPromise;
+        };
+        
+        // Start searches with staggered initialization - start with 1, then add more gradually
+        let searchesStarted = 0;
+        const maxSearches = Math.min(concurrency, tracks.length);
+        
+        // Start first search immediately
+        if (searchesStarted < maxSearches) {
+            startNextSearch();
+            searchesStarted++;
+        }
+        
+        // Add additional searches with 1-second delays
+        const staggerInterval = setInterval(() => {
+            if (searchesStarted < maxSearches && currentIndex < tracks.length) {
+                startNextSearch();
+                searchesStarted++;
+            } else {
+                clearInterval(staggerInterval);
+            }
+        }, 1000); // 1 second delay between new searches
+        
+        // Process remaining searches as active ones complete
+        while (currentIndex < tracks.length || activeSearches.size > 0) {
+            // Fill up available slots with new searches
+            while (currentIndex < tracks.length && activeSearches.size < concurrency) {
+                startNextSearch(); // Don't await here, let them run concurrently
+            }
+            
+            // Wait for at least one search to complete
+            if (activeSearches.size > 0) {
+                await Promise.race(Array.from(activeSearches.keys()));
+            }
+        }
+        
+        // Wait for all searches to complete
+        await Promise.all(results);
+        
+        // Final rebuild of the URLs list
+        this.rebuildUrlsList();
+        
+        // Scroll to bottom of textarea
+        const youtubeUrlsTextarea = document.getElementById('youtube-urls');
+        youtubeUrlsTextarea.scrollTop = youtubeUrlsTextarea.scrollHeight;
+        
+        return { found, failed };
+    }
+    
+    async performSingleTrackSearch(track, trackIndex) {
+        const query = `${track.artist} ${track.title}`.trim();
+        const progressDiv = document.getElementById('search-progress');
+        
         try {
-            // Use the new bulk search endpoint that uses queue-based processing
-            const response = await fetch('/api/search/bulk-youtube-urls', {
+            // Update progress
+            progressDiv.innerHTML += `Searching ${trackIndex + 1}: ${query}\n`;
+            
+            // Search for individual track
+            const response = await fetch('/api/search/youtube-urls', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ tracks: tracks, maxConcurrency: concurrency }),
+                body: JSON.stringify({ tracks: [track], concurrent: true }),
             });
             
             const data = await response.json();
             
-            if (response.ok && data.results) {
-                // Process all results
-                data.results.forEach((result, index) => {
-                    const trackNumber = String(index + 1).padStart(2, '0');
-                    const trackTitle = `${trackNumber}. ${tracks[index].artist} - ${tracks[index].title}`;
+            if (response.ok && data.results && data.results.length > 0) {
+                const result = data.results[0];
+                
+                if (result.found && result.url) {
+                    progressDiv.innerHTML += `✓ Found: ${result.url}\n`;
                     
-                    if (result.found && result.url) {
-                        this.rawUrlData.push(trackTitle, result.url);
-                        found++;
-                        progressDiv.innerHTML += `✓ Found: ${result.url}\n`;
-                        this.updateTrackStatus(index, 'found', 'Found');
-                        this.currentTracks[index].url = result.url;
-                        if (result.thumbnail) {
-                            this.currentTracks[index].thumbnail = result.thumbnail;
-                            this.updateTrackThumbnail(index, result.thumbnail);
-                        }
-                    } else {
-                        this.rawUrlData.push(trackTitle, '# Not found');
-                        failed++;
-                        progressDiv.innerHTML += `✗ Not found: ${tracks[index].artist} - ${tracks[index].title}\n`;
-                        this.updateTrackStatus(index, 'not-found', 'Not Found');
+                    // Update the track object with the found URL and thumbnail
+                    this.currentTracks[trackIndex].url = result.url;
+                    if (result.thumbnail) {
+                        this.currentTracks[trackIndex].thumbnail = result.thumbnail;
+                        this.updateTrackThumbnail(trackIndex, result.thumbnail);
                     }
-                });
-                
-                // Update the textarea with current results
-                this.toggleTrackInfo();
-                
-                // Scroll to bottom of textarea
-                const youtubeUrlsTextarea = document.getElementById('youtube-urls');
-                youtubeUrlsTextarea.scrollTop = youtubeUrlsTextarea.scrollHeight;
+                    
+                    return { 
+                        trackIndex, 
+                        success: true, 
+                        found: true, 
+                        url: result.url, 
+                        thumbnail: result.thumbnail 
+                    };
+                } else {
+                    progressDiv.innerHTML += `✗ Not found: ${query}\n`;
+                    
+                    return { 
+                        trackIndex, 
+                        success: true, 
+                        found: false 
+                    };
+                }
             } else {
-                throw new Error(data.error || 'Queue-based search failed');
+                progressDiv.innerHTML += `✗ Search failed: ${query}\n`;
+                return { 
+                    trackIndex, 
+                    success: false, 
+                    error: new Error('Search API failed') 
+                };
             }
         } catch (error) {
-            console.error('Queue-based search failed:', error);
-            progressDiv.innerHTML += `✗ Queue-based search failed: ${error.message}\n`;
-            
-            // Mark all tracks as failed
-            tracks.forEach((track, index) => {
-                const trackNumber = String(index + 1).padStart(2, '0');
-                const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
-                this.rawUrlData.push(trackTitle, '# Error');
-                failed++;
-                this.updateTrackStatus(index, 'error', 'Error');
-            });
+            console.error(`Search failed for track ${trackIndex}:`, error);
+            progressDiv.innerHTML += `✗ Error: ${query} - ${error.message}\n`;
+            return { 
+                trackIndex, 
+                success: false, 
+                error 
+            };
         }
-        
-        return { found, failed };
     }
     
 async searchVideoUrls() {
@@ -1527,6 +1771,38 @@ async searchVideoUrls() {
         tracksInfo.innerHTML = `
             <p><strong>Found ${foundCount}/${totalTracks} tracks</strong></p>
         `;
+    }
+    
+    rebuildUrlsList() {
+        if (!this.currentTracks || this.currentTracks.length === 0) {
+            return;
+        }
+        
+        // Rebuild rawUrlData from scratch in the correct order
+        this.rawUrlData = [];
+        
+        this.currentTracks.forEach((track, index) => {
+            const trackNumber = String(index + 1).padStart(2, '0');
+            const trackTitle = `${trackNumber}. ${track.artist} - ${track.title}`;
+            
+            // Check if this track has been found
+            if (track.url && track.url.trim() !== '') {
+                this.rawUrlData.push(trackTitle, track.url);
+            } else {
+                // Check the search status to determine what to show
+                const status = this.tracksSearchStatus.get(index);
+                if (status === 'searching' || status === 'queued-search') {
+                    this.rawUrlData.push(trackTitle, '# Searching...');
+                } else if (status === 'error') {
+                    this.rawUrlData.push(trackTitle, '# Error');
+                } else {
+                    this.rawUrlData.push(trackTitle, '# Not found');
+                }
+            }
+        });
+        
+        // Update the textarea with current results based on checkbox state
+        this.toggleTrackInfo();
     }
     
     checkSearchCompletion() {
