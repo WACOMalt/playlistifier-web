@@ -390,11 +390,7 @@ fieldset label {
     align-items: center;
     justify-content: center;
     background: #fff;
-    border: 2px inset #c0c0c0;
-    border-top: 2px solid #808080;
-    border-left: 2px solid #808080;
-    border-right: 2px solid #dfdfdf;
-    border-bottom: 2px solid #dfdfdf;
+    border: none;
 }
 
 .track-image {

@@ -515,20 +515,21 @@ async saveAllTracks() {
         }
     }
 
-    generateM3UPlaylist(sortedTrackIndices, trackMap, includeTrackNumbers, padding) {
+    generateM3U8Playlist(sortedTrackIndices, trackMap, includeTrackNumbers, padding) {
         const playlistName = this.currentMetadata?.name || this.currentMetadata?.title || 'Playlist';
         
-        // M3U format with extended info
-        let m3uContent = '#EXTM3U\n';
-        m3uContent += `#PLAYLIST:${playlistName}\n\n`;
+        // M3U8 format with extended info (UTF-8 encoded for full Unicode support)
+        let m3u8Content = '#EXTM3U\n';
+        m3u8Content += `#PLAYLIST:${playlistName}\n\n`;
         
         sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
             const downloadData = trackMap.get(trackIndex);
             const track = downloadData.track;
             const trackNumber = String(sequentialIndex + 1).padStart(padding, '0');
             
-            // Sanitize for filename
+            // Sanitize for filename while preserving Unicode characters
             const sanitizeFilename = (str) => {
+                // Only replace filesystem-unsafe characters, preserve Unicode
                 return str.replace(/[<>:"/\\|*?]/g, '_').replace(/\s+/g, ' ').trim();
             };
             
@@ -536,12 +537,14 @@ async saveAllTracks() {
             const title = sanitizeFilename(track.title || 'Unknown Title');
             const filename = includeTrackNumbers ? `${trackNumber} - ${artist} - ${title}.mp3` : `${artist} - ${title}.mp3`;
             
-            // Add extended info and file reference
-            m3uContent += `#EXTINF:-1,${track.artist || 'Unknown Artist'} - ${track.title || 'Unknown Title'}\n`;
-            m3uContent += `${filename}\n`;
+            // Add extended info and file reference - full Unicode support in M3U8
+            const displayArtist = (track.artist || 'Unknown Artist').replace(/[\r\n]/g, ' ');
+            const displayTitle = (track.title || 'Unknown Title').replace(/[\r\n]/g, ' ');
+            m3u8Content += `#EXTINF:-1,${displayArtist} - ${displayTitle}\n`;
+            m3u8Content += `${filename}\n`;
         });
         
-        return m3uContent;
+        return m3u8Content;
     }
 
     async downloadAllAsZip() {
@@ -616,15 +619,15 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
             zip.file(filename, downloadData.blob);
         });
         
-        // Add M3U playlist file
+        // Add M3U8 playlist file (UTF-8 encoded for better Unicode support)
         const playlistName = this.currentMetadata?.name || this.currentMetadata?.title || 'Playlist';
         const sanitizedPlaylistName = playlistName.replace(/[<>:"/\\|*?]/g, '_');
         const includeTrackNumbers = document.getElementById('track-numbers-checkbox').checked;
-        const m3uContent = this.generateM3UPlaylist(sortedTrackIndices, trackMap, includeTrackNumbers, padding);
-        const m3uFilename = `${sanitizedPlaylistName}.m3u`;
+        const m3u8Content = this.generateM3U8Playlist(sortedTrackIndices, trackMap, includeTrackNumbers, padding);
+        const m3u8Filename = `${sanitizedPlaylistName}.m3u8`;
         
-        console.log(`Adding M3U playlist file: ${m3uFilename}`);
-        zip.file(m3uFilename, m3uContent);
+        console.log(`Adding M3U8 playlist file: ${m3u8Filename}`);
+        zip.file(m3u8Filename, m3u8Content);
         
         // Add playlist file with YouTube URLs
         const playlistFilename = `${sanitizedPlaylistName} - songs.txt`;
@@ -978,21 +981,21 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
                 }
             }
             
-            // Also save the M3U playlist file in the playlist subfolder
+            // Also save the M3U8 playlist file in the playlist subfolder
             try {
                 const playlistName = this.currentMetadata?.name || this.currentMetadata?.title || 'Playlist';
                 const sanitizedPlaylistName = playlistName.replace(/[<>:"/\\|*?]/g, '_');
                 const includeTrackNumbers = document.getElementById('track-numbers-checkbox').checked;
-                const m3uContent = this.generateM3UPlaylist(sortedTrackIndices, trackMap, includeTrackNumbers, padding);
-                const m3uFilename = `${sanitizedPlaylistName}.m3u`;
+                const m3u8Content = this.generateM3U8Playlist(sortedTrackIndices, trackMap, includeTrackNumbers, padding);
+                const m3u8Filename = `${sanitizedPlaylistName}.m3u8`;
                 
-                const m3uFileHandle = await playlistDirHandle.getFileHandle(m3uFilename, { create: true });
-                const m3uWritable = await m3uFileHandle.createWritable();
-                await m3uWritable.write(m3uContent);
-                await m3uWritable.close();
-                console.log(`Saved M3U playlist file: ${m3uFilename}`);
+                const m3u8FileHandle = await playlistDirHandle.getFileHandle(m3u8Filename, { create: true });
+                const m3u8Writable = await m3u8FileHandle.createWritable();
+                await m3u8Writable.write(m3u8Content);
+                await m3u8Writable.close();
+                console.log(`Saved M3U8 playlist file: ${m3u8Filename}`);
             } catch (error) {
-                console.error('Failed to save M3U playlist file:', error);
+                console.error('Failed to save M3U8 playlist file:', error);
             }
             
             // Also save the playlist file with YouTube URLs in the playlist subfolder

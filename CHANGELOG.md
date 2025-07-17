@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2025-07-17
+
+### Changed
+- Switched from M3U to M3U8 playlist format for better Unicode support
+- M3U8 files now natively handle Unicode characters in track and artist names
+- Improved compatibility with international character sets (Chinese, Japanese, Arabic, etc.)
+
+### Improved
+- Enhanced playlist file generation with UTF-8 encoding
+- Better support for special characters and emojis in playlist files
+- Cleaner thumbnail display by removing borders from track artwork
+
+### Fixed
+- Fixed Unicode character handling in playlist files
+- Removed unnecessary borders around track thumbnails for cleaner UI
+- Improved M3U8 format compatibility with modern media players
+
 ## [1.7.0] - 2025-07-17
 
 ### Changed
