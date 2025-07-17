@@ -349,8 +349,9 @@ fieldset label {
     outline: none;
 }
 
-/* Search progress */
+/* Search progress - Always hidden */
 .search-progress {
+    display: none !important;
     background: #fff;
     border: 2px inset #c0c0c0;
     border-top: 2px solid #808080;
@@ -644,12 +645,24 @@ footer {
         align-items: start;
     }
     
+    /* Make both windows have similar heights by setting equal content heights */
     #youtube-urls {
-        min-height: 200px;
+        height: 345px;
+        min-height: 345px;
+        max-height: 345px;
     }
     
     #tracks-list {
-        min-height: 200px;
+        height: 345px;
+        min-height: 345px;
+        max-height: 345px;
+    }
+    
+    /* Ensure both windows have the same overall height */
+    #youtube-urls-section .window-body,
+    #tracks-section .window-body {
+        height: auto;
+        min-height: 450px;
     }
 }
 
