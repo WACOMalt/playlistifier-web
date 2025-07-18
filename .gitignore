@@ -93,6 +93,9 @@ downloads/
 # Tools directory with large binaries
 tools/
 
+# Agent documentation (local only)
+00AGENT/
+
 # Logs
 logs
 *.log
