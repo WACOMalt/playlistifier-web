@@ -282,12 +282,6 @@ async saveAllTracks() {
             this.showError('No tracks to download');
             return;
         }
-        
-        // Check if all searches are complete before allowing download
-        if (!this.searchCompleted) {
-            this.showError('Cannot download tracks while searches are still in progress. Please wait for all searches to complete.');
-            return;
-        }
 
         const tracksToDownload = [];
         for (let i = 0; i < this.currentTracks.length; i++) {
@@ -804,22 +798,48 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
     updateDownloadAllButton() {
         const downloadAllBtn = document.getElementById('download-btn');
         const totalTracks = this.currentTracks.length;
-        const downloadedCount = this.downloadedTracks.size;
-        const remainingCount = totalTracks - downloadedCount;
         
-        // Check if all searches are complete
-        if (!this.searchCompleted) {
-            downloadAllBtn.textContent = 'Waiting for searches to complete...';
-            downloadAllBtn.disabled = true;
-            return;
+        // Count tracks that are actually in "found" state (ready to download)
+        let foundReadyToDownloadCount = 0;
+        let totalDownloadedCount = 0;
+        
+        for (let i = 0; i < totalTracks; i++) {
+            const trackEl = document.querySelector(`[data-track-id="${i}"]`);
+            if (trackEl) {
+                const statusEl = trackEl.querySelector('.track-status');
+                if (statusEl) {
+                    const statusClass = statusEl.className;
+                    
+                    // Only count tracks that are exactly in "found" state
+                    if (statusClass.includes('found') && 
+                        !statusClass.includes('queued-download') && 
+                        !statusClass.includes('downloading') && 
+                        !statusClass.includes('downloaded') &&
+                        !statusClass.includes('saved')) {
+                        foundReadyToDownloadCount++;
+                    }
+                    // Count downloaded tracks for ZIP option
+                    else if (statusClass.includes('downloaded') || statusClass.includes('saved')) {
+                        totalDownloadedCount++;
+                    }
+                }
+            }
         }
         
-        if (remainingCount > 0) {
-            downloadAllBtn.textContent = `Download Remaining (${remainingCount})`;
-            downloadAllBtn.disabled = false; // Enable since searches are complete
+        if (foundReadyToDownloadCount > 0) {
+            downloadAllBtn.textContent = `Download Found Tracks (${foundReadyToDownloadCount})`;
+            downloadAllBtn.disabled = false;
+        } else if (totalDownloadedCount > 0) {
+            // Check if all tracks have been downloaded
+            if (totalDownloadedCount === totalTracks) {
+                downloadAllBtn.textContent = 'Save All as ZIP';
+            } else {
+                downloadAllBtn.textContent = `Save ${totalDownloadedCount} Tracks as ZIP`;
+            }
+            downloadAllBtn.disabled = false;
         } else {
-            downloadAllBtn.textContent = 'Save All as ZIP';
-            downloadAllBtn.disabled = false; // Enable button to save zip
+            downloadAllBtn.textContent = 'No tracks found to download';
+            downloadAllBtn.disabled = true;
         }
     }
     
@@ -838,20 +858,15 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
             return;
         }
         
-        // Check if all searches are complete
-        if (!this.searchCompleted) {
-            downloadToFolderBtn.disabled = true;
-            downloadToFolderBtn.title = 'Waiting for searches to complete...';
-            return;
-        }
+        // No need to wait for all searches to complete - we can save whatever is downloaded
         
-        // Check if all tracks are downloaded
-        if (downloadedCount < totalTracks) {
+        // Check if at least one track is downloaded
+        if (downloadedCount < 1) {
             downloadToFolderBtn.disabled = true;
-            downloadToFolderBtn.title = `Download all tracks first (${downloadedCount}/${totalTracks} completed)`;
+            downloadToFolderBtn.title = `Download at least one track first (${downloadedCount}/${totalTracks} completed)`;
         } else {
             downloadToFolderBtn.disabled = false;
-            downloadToFolderBtn.title = 'Save files directly to a folder on your computer';
+            downloadToFolderBtn.title = `Save ${downloadedCount} downloaded files to a folder on your computer`;
         }
     }
 
@@ -896,12 +911,7 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
             return;
         }
         
-        // Check if all searches are complete before allowing download
-        if (!this.searchCompleted) {
-            console.log('Search not completed');
-            this.showError('Cannot download tracks while searches are still in progress. Please wait for all searches to complete.');
-            return;
-        }
+        // No need to wait for all searches to complete - we can save whatever is downloaded
         
         // Check if we have any downloaded tracks
         if (!this.downloadedBlobs || this.downloadedBlobs.size === 0) {
@@ -1354,6 +1364,12 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
                     break;
             }
         }
+        
+        // Update the tracks info display whenever any track status changes
+        this.updateTracksInfo();
+        
+        // Update the download button whenever any track status changes
+        this.updateDownloadAllButton();
     }
 
     updateTrackThumbnail(trackIndex, thumbnailUrl) {
@@ -2030,10 +2046,85 @@ async searchVideoUrls() {
         }
         
         const totalTracks = this.currentTracks.length;
-        const foundCount = Array.from(this.tracksSearchStatus.values()).filter(status => status === 'found').length;
+        
+        // Count tracks by status
+        const statusCounts = {
+            searching: 0,
+            found: 0,
+            downloading: 0,
+            downloaded: 0,
+            saved: 0,
+            error: 0
+        };
+        
+        // Count search statuses
+        for (let i = 0; i < totalTracks; i++) {
+            const searchStatus = this.tracksSearchStatus.get(i);
+            if (searchStatus === 'queued-search' || searchStatus === 'searching') {
+                statusCounts.searching++;
+            } else if (searchStatus === 'found') {
+                statusCounts.found++;
+            } else if (searchStatus === 'error' || searchStatus === 'not-found') {
+                statusCounts.error++;
+            }
+        }
+        
+        // Count download statuses by checking track elements
+        for (let i = 0; i < totalTracks; i++) {
+            const trackEl = document.querySelector(`[data-track-id="${i}"]`);
+            if (trackEl) {
+                const statusEl = trackEl.querySelector('.track-status');
+                if (statusEl) {
+                    const statusClass = statusEl.className;
+                    if (statusClass.includes('queued-download') || statusClass.includes('downloading')) {
+                        statusCounts.downloading++;
+                        // Remove from found count if it's now downloading
+                        if (statusClass.includes('downloading') && statusCounts.found > 0) {
+                            statusCounts.found--;
+                        }
+                    } else if (statusClass.includes('downloaded')) {
+                        statusCounts.downloaded++;
+                        // Remove from found count if it's now downloaded
+                        if (statusCounts.found > 0) {
+                            statusCounts.found--;
+                        }
+                    } else if (statusClass.includes('saved')) {
+                        statusCounts.saved++;
+                        // Remove from downloaded count if it's now saved
+                        if (statusCounts.downloaded > 0) {
+                            statusCounts.downloaded--;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Create status display with colors
+        const statusParts = [];
+        
+        if (statusCounts.searching > 0) {
+            statusParts.push(`<span style="color: #ffaa00;">Searching: ${statusCounts.searching}</span>`);
+        }
+        if (statusCounts.found > 0) {
+            statusParts.push(`<span style="color: #0066cc;">Found: ${statusCounts.found}</span>`);
+        }
+        if (statusCounts.downloading > 0) {
+            statusParts.push(`<span style="color: #ff6600;">Downloading: ${statusCounts.downloading}</span>`);
+        }
+        if (statusCounts.downloaded > 0) {
+            statusParts.push(`<span style="color: #00aa00;">Downloaded: ${statusCounts.downloaded}</span>`);
+        }
+        if (statusCounts.saved > 0) {
+            statusParts.push(`<span style="color: #006600;">Saved: ${statusCounts.saved}</span>`);
+        }
+        if (statusCounts.error > 0) {
+            statusParts.push(`<span style="color: #cc0000;">Error: ${statusCounts.error}</span>`);
+        }
+        
+        const statusText = statusParts.length > 0 ? ` - ${statusParts.join(', ')}` : '';
         
         tracksInfo.innerHTML = `
-            <p><strong>Found ${foundCount}/${totalTracks} tracks</strong></p>
+            <p><strong>${totalTracks} Total Tracks${statusText}</strong></p>
         `;
     }
     
