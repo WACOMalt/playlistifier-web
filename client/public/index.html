@@ -12,7 +12,7 @@
     
     <!-- Open Graph Meta Tags (for Discord, Facebook, etc.) -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="🎵 Playlistifier Web - Convert Playlists to Video URLs">
+    <meta property="og:title" content="Playlistifier Web - Convert Playlists to Video URLs">
     <meta property="og:description" content="Convert Spotify and YouTube playlists to video URLs. Extract track lists, search for YouTube videos, and download your favorite music playlists with ease.">
     <meta property="og:url" content="https://your-domain.com">
     <meta property="og:site_name" content="Playlistifier Web">
@@ -23,7 +23,7 @@
     
     <!-- Twitter Card Meta Tags -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="🎵 Playlistifier Web - Convert Playlists to Video URLs">
+    <meta name="twitter:title" content="Playlistifier Web - Convert Playlists to Video URLs">
     <meta name="twitter:description" content="Convert Spotify and YouTube playlists to video URLs. Extract track lists, search for YouTube videos, and download your favorite music playlists.">
     <meta name="twitter:image" content="https://your-domain.com/og-image.svg">
     <meta name="twitter:image:alt" content="Playlistifier Web - Convert playlists to video URLs">
@@ -37,10 +37,18 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <div class="zoom-controls">
+        <button id="zoom-in">+</button>
+        <img src="magnifying_glass.png" alt="Magnifying Glass" class="zoom-icon">
+        <button id="zoom-out">-</button>
+    </div>
     <div id="app">
-        <header>
-            <h1>🎵 Playlistifier Web</h1>
-            <p>Convert Playlists to Video URLs</p>
+        <header class="header-layout">
+            <img src="music-note.gif" alt="Music Note" class="header-gif">
+            <div class="header-text">
+                <h1>Playlistifier Web</h1>
+                <p>Convert Playlists to Video URLs</p>
+            </div>
         </header>
 
         <main>
@@ -179,13 +187,14 @@
         </main>
 
         <footer>
-            <p>Playlistifier Web v1.8.0</p>
+            <p>Playlistifier Web v1.9.0</p>
             <p><a href="/changelog" style="color: #4dd0e1; text-decoration: underline; font-size: 11px;">Changelog & FAQ</a></p>
         </footer>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="libs/jszip.min.js"></script>
+    <script src="src/image-scaler.js"></script>
     <script src="src/app.js"></script>
 </body>
 </html>

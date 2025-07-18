@@ -58,6 +58,13 @@ document.getElementById('download-btn').addEventListener('click', () => this.sav
         
         // Concurrent downloads configuration
         document.getElementById('max-concurrent-downloads').addEventListener('input', (e) => this.updateMaxConcurrentDownloads(e.target.value));
+        
+        // Zoom controls
+        document.getElementById('zoom-in').addEventListener('click', () => this.zoomIn());
+        document.getElementById('zoom-out').addEventListener('click', () => this.zoomOut());
+        
+        // Initialize zoom level
+        this.zoomLevel = 1;
     }
 
     setupWebSocket() {
@@ -2193,6 +2200,31 @@ async searchVideoUrls() {
         
         // Show initial section
         this.showSection('url-input-section');
+    }
+    
+    // Zoom Methods
+    zoomIn() {
+        this.zoomLevel = Math.min(this.zoomLevel + 0.25, 4.0); // Max zoom 400%
+        this.applyZoom();
+    }
+    
+    zoomOut() {
+        this.zoomLevel = Math.max(this.zoomLevel - 0.25, 0.5); // Min zoom 50%
+        this.applyZoom();
+    }
+    
+    applyZoom() {
+        document.body.style.zoom = this.zoomLevel;
+        // Alternative for browsers that don't support zoom
+        if (!('zoom' in document.body.style)) {
+            document.body.style.transform = `scale(${this.zoomLevel})`;
+            document.body.style.transformOrigin = 'top left';
+        }
+        
+        // Emit zoom change event for image scaling
+        window.dispatchEvent(new CustomEvent('zoomChanged', {
+            detail: { zoomLevel: this.zoomLevel }
+        }));
     }
 }
 

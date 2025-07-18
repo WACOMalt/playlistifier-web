@@ -5,97 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.8.0] - 2025-07-17
+## [1.9.0] - 2025-07-18
 
-### Changed
-- Switched from M3U to M3U8 playlist format for better Unicode support
-- M3U8 files now natively handle Unicode characters in track and artist names
-- Improved compatibility with international character sets (Chinese, Japanese, Arabic, etc.)
+### Added
+- Comprehensive technical documentation wiki
+- Streamlined main README with wiki integration
+- Professional version badges and project presentation
+
+### Documentation
+- Complete technical analysis and project documentation
+- Executive summary for stakeholders
+- Technical deep dive for developers
+- Structured wiki with clear navigation
+- Version history and development timeline
 
 ### Improved
-- Enhanced playlist file generation with UTF-8 encoding
-- Better support for special characters and emojis in playlist files
-- Cleaner thumbnail display by removing borders from track artwork
+- Enhanced project discoverability and professional appearance
+- Better separation of user-facing README and technical documentation
+- Cleaner repository structure focused on source code
 
-### Fixed
-- Fixed Unicode character handling in playlist files
-- Removed unnecessary borders around track thumbnails for cleaner UI
-- Improved M3U8 format compatibility with modern media players
+## [1.8.0] - 2025-07-17
+
+### Added
+- M3U8 playlist format with full Unicode support for international characters
+
+### Improved
+- Cleaner track thumbnail display
 
 ## [1.7.0] - 2025-07-17
 
 ### Changed
-- Reduced default maximum concurrent downloads from 20 to 10 for better system resource management
-- Improved input handler for concurrent downloads setting to ensure proper value updates
-- Enhanced default concurrency balance for more stable download performance
+- Reduced default maximum concurrent downloads from 20 to 10
 
 ### Fixed
-- Fixed input field default value synchronization between HTML and JavaScript
-- Ensured consistent concurrent download limits across all download operations
+- Fixed concurrent downloads input field synchronization
 
 ## [1.6.0] - 2025-07-17
 
 ### Fixed
-- Fixed Spotify playlist thumbnail display issue where YouTube thumbnails were replacing Spotify album artwork in the frontend
-- Frontend now correctly prioritizes Spotify album artwork for Spotify playlists while maintaining YouTube thumbnails for non-Spotify sources
-- Preserved existing download functionality which already used correct artwork sources
-
-### Technical Details
-- Updated `updateTrackThumbnail` method to check for existing `spotify-artwork` class and preserve it
-- Added logic to only replace thumbnails if they are `youtube-thumbnail` class or no existing image
-- Improved thumbnail management with better CSS class handling
+- Fixed Spotify playlist thumbnail display issue
 
 ## [1.5.0] - 2025-07-16
 
 ### Added
 - M3U playlist file generation for downloaded tracks
-- M3U files now included in ZIP downloads and folder saves
-- Enhanced album art embedding in backend using FFmpeg
-- Improved metadata tagging for better Windows Media Player compatibility
-
-### Improved
-- Better album artwork handling in downloads
-- Enhanced metadata preservation in MP3 files
-- Improved file organization in downloads
+- Improved album art embedding and metadata tagging
 
 ## [1.4.0] - 2025-07-15
 
 ### Added
-- File System Access API support for direct folder downloads
-- "Download to Folder" functionality for Chrome 86+, Edge 86+, Opera 72+
+- "Download to Folder" functionality for modern browsers
 - Track numbering option in ZIP downloads
-- Improved concurrent download management
-
-### Enhanced
-- Better download progress tracking
-- Improved file naming and organization
-- Enhanced ZIP file creation with proper track ordering
 
 ## [1.3.0] - 2025-07-14
 
 ### Added
 - Individual track download and save functionality
 - Real-time download progress tracking
-- Staggered download queue with configurable concurrency
-- Track-by-track status management
-
-### Improved
-- Better error handling for individual track failures
-- Enhanced UI feedback for download states
-- Improved concurrent download performance
+- Configurable download concurrency
 
 ## [1.2.0] - 2025-07-13
 
 ### Added
 - Real-time YouTube URL search with progress tracking
-- Concurrent search functionality with queue management
 - Live track status updates during search
-- Enhanced search result display
-
-### Improved
-- Better search performance with batched requests
-- Improved UI responsiveness during searches
-- Enhanced error handling for search failures
 
 ## [1.1.0] - 2025-07-12
 
@@ -103,12 +76,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YouTube URL generation and display
 - Copy to clipboard functionality
 - Save URLs to file feature
-- Track info toggle for URL display
-
-### Enhanced
-- Better playlist metadata handling
-- Improved URL formatting and organization
-- Enhanced user interface for URL management
 
 ## [1.0.0] - 2025-07-11
 

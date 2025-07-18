@@ -2,7 +2,7 @@
 
 > **🎵 Convert Spotify and YouTube playlists to high-quality MP3 files with embedded metadata and artwork**
 
-[![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)](https://github.com/WACOMalt/playlistifier-web/releases)
+[![Version](https://img.shields.io/badge/version-1.9.0-blue.svg)](https://github.com/WACOMalt/playlistifier-web/releases)
 [![Node.js](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-ISC-yellow.svg)](LICENSE)
 

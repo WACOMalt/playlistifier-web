@@ -1,3 +1,34 @@
+header.header-layout {
+    display: flex !important;
+    align-items: center;
+    text-align: left !important;
+    width: auto;
+    min-width: 0;
+}
+
+.header-gif {
+    width: 64px;
+    height: 81px;
+    margin-right: 16px;
+    flex-shrink: 0;
+    transform: translate(-6px, -8px);
+}
+
+.header-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+}
+
+.header-text h1 {
+    margin: 0 0 4px 0;
+}
+
+.header-text p {
+    margin: 0;
+}
+
 /* Windows 98 Theme - Clean Implementation using 98.css */
 
 /* Basic layout */
@@ -8,6 +39,80 @@ body {
     padding: 10px;
     font-family: 'MS Sans Serif', sans-serif;
     font-size: 11px;
+    position: relative;
+}
+
+.zoom-controls {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.zoom-controls button {
+    font-size: 24px !important;
+    width: 36px !important;
+    height: 36px !important;
+    margin: 0 !important;
+    border: 2px solid #808080 !important;
+    border-top: 2px solid #dfdfdf !important;
+    border-left: 2px solid #dfdfdf !important;
+    border-right: 2px solid #808080 !important;
+    border-bottom: 2px solid #808080 !important;
+    background: #c0c0c0 !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    max-width: 36px !important;
+    max-height: 36px !important;
+}
+
+.zoom-controls button:active {
+    border: 2px solid #c0c0c0;
+    border-top: 2px solid #808080;
+    border-left: 2px solid #808080;
+    border-right: 2px solid #dfdfdf;
+    border-bottom: 2px solid #dfdfdf;
+}
+
+.zoom-icon {
+    width: 32px;
+    height: 32px;
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: -webkit-crisp-edges !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+    image-rendering: -webkit-optimize-contrast !important;
+    -ms-interpolation-mode: nearest-neighbor !important;
+}
+
+/* Bottom right decoration GIF */
+body::after {
+    content: '';
+    position: fixed;
+    bottom: -8px;
+    right: -16px;
+    width: 63px;
+    height: 144px;
+    background: url('bottom-right-decoration.gif') no-repeat;
+    background-size: 63px 144px;
+    z-index: 1000;
+    pointer-events: none;
+    /* Pixel-perfect rendering for background GIF */
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: -webkit-crisp-edges !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+    image-rendering: -webkit-optimize-contrast !important;
+    -ms-interpolation-mode: nearest-neighbor !important;
 }
 
 #app {
@@ -15,6 +120,14 @@ body {
     margin: 0 auto;
     padding: 0;
     text-align: center;
+}
+
+/* Make URL input window match column width */
+#url-input-section {
+    /* Default: full width on small screens */
+    width: 100%;
+    max-width: 750px;
+    margin: 0 auto;
 }
 
 /* Header */
@@ -25,6 +138,12 @@ header {
     background: rgba(192, 192, 192, 0.9);
     border: 2px outset #c0c0c0;
     display: inline-block;
+}
+
+/* Override for header-layout */
+header.header-layout {
+    display: inline-flex !important;
+    width: auto !important;
 }
 
 header h1 {
@@ -51,12 +170,16 @@ main {
 /* Windows 98 Window Structure */
 .window {
     background: rgba(192, 192, 192, 0.95);
-    border: 2px outset #c0c0c0;
-    margin-bottom: 11.5px;
+    border: 2px solid #c0c0c0;
+    border-top: 2px solid #dfdfdf;
+    border-left: 2px solid #dfdfdf;
+    border-right: 2px solid #808080;
+    border-bottom: 2px solid #808080;
+    margin-bottom: 12px;
 }
 
 .window-body {
-    padding: 9.2px;
+    padding: 9px;
     background: rgba(192, 192, 192, 0.95);
     border: none;
     margin: 0;
@@ -65,17 +188,17 @@ main {
 .title-bar {
     background: linear-gradient(90deg, #0040ff 0%, #4080ff 100%);
     color: white;
-    padding: 2.3px;
+    padding: 2px;
     font-size: 11px;
     font-weight: bold;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    height: 20.7px;
+    height: 21px;
 }
 
 .title-bar-text {
-    padding: 0 4.6px;
+    padding: 0 5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -92,13 +215,21 @@ main {
     padding: 0;
     margin: 0;
     background: #c0c0c0;
-    border: 1px outset #c0c0c0;
+    border: 2px solid #c0c0c0;
+    border-top: 2px solid #dfdfdf;
+    border-left: 2px solid #dfdfdf;
+    border-right: 2px solid #808080;
+    border-bottom: 2px solid #808080;
     font-size: 9.2px;
     line-height: 1;
 }
 
 .title-bar-controls button:active {
-    border: 1px inset #c0c0c0;
+    border: 2px solid #c0c0c0;
+    border-top: 2px solid #808080;
+    border-left: 2px solid #808080;
+    border-right: 2px solid #dfdfdf;
+    border-bottom: 2px solid #dfdfdf;
 }
 
 /* Fieldset styling for Windows 98 groups */
@@ -141,11 +272,11 @@ input:focus, textarea:focus, select:focus {
 
 button {
     background: #c0c0c0;
-    border: 1px outset #c0c0c0;
-    border-top: 1px solid #dfdfdf;
-    border-left: 1px solid #dfdfdf;
-    border-right: 1px solid #808080;
-    border-bottom: 1px solid #808080;
+    border: 2px solid #c0c0c0;
+    border-top: 2px solid #dfdfdf;
+    border-left: 2px solid #dfdfdf;
+    border-right: 2px solid #808080;
+    border-bottom: 2px solid #808080;
     padding: 4.6px 9.2px;
     font-family: 'MS Sans Serif', sans-serif;
     font-size: 12.65px;
@@ -159,11 +290,11 @@ button:hover {
 }
 
 button:active {
-    border: 1px inset #c0c0c0;
-    border-top: 1px solid #808080;
-    border-left: 1px solid #808080;
-    border-right: 1px solid #dfdfdf;
-    border-bottom: 1px solid #dfdfdf;
+    border: 2px solid #c0c0c0;
+    border-top: 2px solid #808080;
+    border-left: 2px solid #808080;
+    border-right: 2px solid #dfdfdf;
+    border-bottom: 2px solid #dfdfdf;
 }
 
 button:disabled {
@@ -173,7 +304,7 @@ button:disabled {
 
 /* Labels */
 label {
-    font-size: 12.65px;
+    font-size: 12px;
     color: #000;
     cursor: pointer;
 }
@@ -282,15 +413,15 @@ fieldset label {
 .error-message {
     color: #800000;
     font-weight: bold;
-    margin-top: 5.75px;
-    font-size: 12.65px;
+    margin-top: 6px;
+    font-size: 12px;
 }
 
 .status-message {
     color: #008000;
     font-weight: bold;
-    margin-top: 5.75px;
-    font-size: 12.65px;
+    margin-top: 6px;
+    font-size: 12px;
 }
 
 /* Progress bars */
@@ -473,7 +604,11 @@ fieldset label {
     min-width: 92px;
     text-align: center;
     background: #c0c0c0;
-    border: 1px outset #c0c0c0;
+    border: 2px solid #c0c0c0;
+    border-top: 2px solid #dfdfdf;
+    border-left: 2px solid #dfdfdf;
+    border-right: 2px solid #808080;
+    border-bottom: 2px solid #808080;
     color: #000;
 }
 
@@ -683,6 +818,11 @@ footer {
         flex-direction: column;
         align-items: flex-start;
     }
+    
+    /* Make URL input window full width on small screens */
+    #url-input-section {
+        width: 100%;
+    }
 }
 
 /* Loading spinner - Windows 98 style */
@@ -707,12 +847,52 @@ footer {
     text-shadow: none !important;
 }
 
-/* Ensure all text uses Windows 98 fonts */
-body, input, textarea, button, select {
+/* Pixel-perfect rendering for all images - true nearest neighbor */
+img, .zoom-icon, .header-gif, img[src$=".gif"], img[src*=".gif"], img[src$=".png"], img[src*=".png"] {
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: -webkit-crisp-edges !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+    image-rendering: -webkit-optimize-contrast !important;
+    -ms-interpolation-mode: nearest-neighbor !important;
+    -webkit-transform: translateZ(0) !important;
+    transform: translateZ(0) !important;
+    -webkit-backface-visibility: hidden !important;
+    backface-visibility: hidden !important;
+    -webkit-perspective: 1000 !important;
+    perspective: 1000 !important;
+    image-orientation: from-image !important;
+    -webkit-font-smoothing: none !important;
+    -moz-osx-font-smoothing: unset !important;
+    font-smooth: never !important;
+    text-rendering: optimizeSpeed !important;
+}
+
+/* Force nearest neighbor on background images too */
+body::after, .header-gif, .zoom-icon {
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: -webkit-crisp-edges !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+    image-rendering: -webkit-optimize-contrast !important;
+    -ms-interpolation-mode: nearest-neighbor !important;
+}
+
+/* Ensure all text uses Windows 98 fonts - clean approach */
+body, input, textarea, button, select, .title-bar, .window, label, legend, li[role=tab], option, table, ul.tree-view {
     font-family: 'MS Sans Serif', sans-serif !important;
+    font-size: 11px !important;
+    -webkit-font-smoothing: none !important;
+    -moz-osx-font-smoothing: unset !important;
+    font-smooth: never !important;
+    text-rendering: optimizeSpeed !important;
 }
 
 /* Ensure monospace elements use Courier New */
 #youtube-urls, .search-progress, pre, code {
     font-family: 'Courier New', monospace !important;
+    -webkit-font-smoothing: none !important;
+    -moz-osx-font-smoothing: unset !important;
+    font-smooth: never !important;
+    text-rendering: optimizeSpeed !important;
 }

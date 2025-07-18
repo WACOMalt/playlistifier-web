@@ -1,0 +1,54 @@
+Available Image Scales
+====================
+
+magnifying_glass.png:
+  0.5x → magnifying_glass_0_5x.png
+  0.75x → magnifying_glass_0_8x.png
+  1x → magnifying_glass.png
+  1.25x → magnifying_glass_1_3x.png
+  1.5x → magnifying_glass_1_5x.png
+  1.75x → magnifying_glass_1_8x.png
+  2x → magnifying_glass_2_0x.png
+  2.25x → magnifying_glass_2_3x.png
+  2.5x → magnifying_glass_2_5x.png
+  2.75x → magnifying_glass_2_8x.png
+  3x → magnifying_glass_3_0x.png
+  3.25x → magnifying_glass_3_3x.png
+  3.5x → magnifying_glass_3_5x.png
+  3.75x → magnifying_glass_3_8x.png
+  4x → magnifying_glass_4_0x.png
+
+music-note.gif:
+  0.5x → music-note_0_5x.gif
+  0.75x → music-note_0_8x.gif
+  1x → music-note.gif
+  1.25x → music-note_1_3x.gif
+  1.5x → music-note_1_5x.gif
+  1.75x → music-note_1_8x.gif
+  2x → music-note_2_0x.gif
+  2.25x → music-note_2_3x.gif
+  2.5x → music-note_2_5x.gif
+  2.75x → music-note_2_8x.gif
+  3x → music-note_3_0x.gif
+  3.25x → music-note_3_3x.gif
+  3.5x → music-note_3_5x.gif
+  3.75x → music-note_3_8x.gif
+  4x → music-note_4_0x.gif
+
+bottom-right-decoration.gif:
+  0.5x → bottom-right-decoration_0_5x.gif
+  0.75x → bottom-right-decoration_0_8x.gif
+  1x → bottom-right-decoration.gif
+  1.25x → bottom-right-decoration_1_3x.gif
+  1.5x → bottom-right-decoration_1_5x.gif
+  1.75x → bottom-right-decoration_1_8x.gif
+  2x → bottom-right-decoration_2_0x.gif
+  2.25x → bottom-right-decoration_2_3x.gif
+  2.5x → bottom-right-decoration_2_5x.gif
+  2.75x → bottom-right-decoration_2_8x.gif
+  3x → bottom-right-decoration_3_0x.gif
+  3.25x → bottom-right-decoration_3_3x.gif
+  3.5x → bottom-right-decoration_3_5x.gif
+  3.75x → bottom-right-decoration_3_8x.gif
+  4x → bottom-right-decoration_4_0x.gif
+
