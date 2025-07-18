@@ -25,7 +25,10 @@ class YouTubeService {
 
     async runYtDlp(args) {
         return new Promise((resolve, reject) => {
-            const process = spawn(this.ytDlpPath, args);
+            const process = spawn(this.ytDlpPath, args, {
+                stdio: ['pipe', 'pipe', 'pipe'],
+                shell: false
+            });
             let stdout = '';
             let stderr = '';
 
@@ -48,14 +51,39 @@ class YouTubeService {
             process.on('error', (error) => {
                 reject(new Error(`Failed to run yt-dlp: ${error.message}`));
             });
+            
+            // Close stdin to prevent process from waiting for input
+            process.stdin.end();
         });
     }
 
-    async runYtDlpWithOutput(args) {
+    async runYtDlpWithOutput(args, timeoutMs = 60000) {
         return new Promise((resolve, reject) => {
-            const process = spawn(this.ytDlpPath, args);
+            const process = spawn(this.ytDlpPath, args, {
+                stdio: ['pipe', 'pipe', 'pipe'],
+                shell: false
+            });
             let stdout = '';
             let stderr = '';
+            let isComplete = false;
+
+            // Set up timeout
+            const timeout = setTimeout(() => {
+                if (!isComplete) {
+                    isComplete = true;
+                    console.log('yt-dlp process timed out, killing process');
+                    process.kill('SIGTERM');
+                    // Try force kill after 2 seconds if still not dead
+                    setTimeout(() => {
+                        try {
+                            process.kill('SIGKILL');
+                        } catch (e) {
+                            // Process already dead
+                        }
+                    }, 2000);
+                    reject(new Error(`yt-dlp process timed out after ${timeoutMs}ms`));
+                }
+            }, timeoutMs);
 
             process.stdout.on('data', (data) => {
                 stdout += data.toString();
@@ -66,12 +94,23 @@ class YouTubeService {
             });
 
             process.on('close', (code) => {
-                resolve({ stdout, stderr, code });
+                if (!isComplete) {
+                    isComplete = true;
+                    clearTimeout(timeout);
+                    resolve({ stdout, stderr, code });
+                }
             });
 
             process.on('error', (error) => {
-                reject(new Error(`Failed to run yt-dlp: ${error.message}`));
+                if (!isComplete) {
+                    isComplete = true;
+                    clearTimeout(timeout);
+                    reject(new Error(`Failed to run yt-dlp: ${error.message}`));
+                }
             });
+            
+            // Close stdin to prevent process from waiting for input
+            process.stdin.end();
         });
     }
 
@@ -347,12 +386,13 @@ class YouTubeService {
         try {
             const args = [
                 '--dump-json',
+                '--flat-playlist',
                 '--no-warnings',
                 '--quiet',
-                `ytsearch10:${query}`  // Get 10 results instead of 1
+                `ytsearch10:${query}`  // Search for 10 videos
             ];
 
-            const result = await this.runYtDlpWithOutput(args);
+            const result = await this.runYtDlpWithOutput(args, 30000); // 30 second timeout
             
             // Even if there are errors, we might still have useful output
             if (result.stdout) {
@@ -364,8 +404,8 @@ class YouTubeService {
                     if (line.trim()) {
                         try {
                             const info = JSON.parse(line);
-                            // Check if this is a video entry (not just metadata)
-                            if (info && info.id && info.webpage_url) {
+                            // Check if this is a video entry (not just metadata) and has a valid duration
+                            if (info && info.id && info.webpage_url && typeof info.duration === 'number' && !isNaN(info.duration)) {
                                 // Generate thumbnail URL from video ID if not provided
                                 let thumbnailUrl = info.thumbnail;
                                 if (!thumbnailUrl && info.id) {

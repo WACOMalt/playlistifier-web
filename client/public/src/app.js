@@ -853,6 +853,7 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
         // Check if File System Access API is supported
         if (!('showDirectoryPicker' in window)) {
             downloadToFolderBtn.disabled = true;
+            downloadToFolderBtn.textContent = 'Save to Folder';
             downloadToFolderBtn.title = 'This feature requires Chrome 86+, Edge 86+, or Opera 72+. Not supported in Firefox or Safari.';
             downloadToFolderBtn.style.opacity = '0.6';
             return;
@@ -863,9 +864,11 @@ sortedTrackIndices.forEach((trackIndex, sequentialIndex) => {
         // Check if at least one track is downloaded
         if (downloadedCount < 1) {
             downloadToFolderBtn.disabled = true;
+            downloadToFolderBtn.textContent = 'Save to Folder';
             downloadToFolderBtn.title = `Download at least one track first (${downloadedCount}/${totalTracks} completed)`;
         } else {
             downloadToFolderBtn.disabled = false;
+            downloadToFolderBtn.textContent = `Save ${downloadedCount} Tracks to Folder`;
             downloadToFolderBtn.title = `Save ${downloadedCount} downloaded files to a folder on your computer`;
         }
     }

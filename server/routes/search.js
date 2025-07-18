@@ -31,6 +31,10 @@ router.post('/youtube-urls', async (req, res) => {
   const requestId = Math.random().toString(36).substring(7);
   
   try {
+    // Ensure YouTube service is initialized
+    await youtubeService.initialize();
+    logToFile(`[${requestId}] YouTube service initialized successfully`);
+    
     logToFile(`[${requestId}] YouTube search request received`);
     logToFile(`[${requestId}] Request body: ${JSON.stringify(req.body, null, 2)}`);
     
@@ -212,7 +216,9 @@ router.post('/youtube-urls', async (req, res) => {
 
   } catch (error) {
     console.error('YouTube search error:', error);
-    res.status(500).json({ error: 'Failed to search for YouTube URLs' });
+    logToFile(`[${requestId}] Search request failed: ${error.message}`, 'ERROR');
+    logToFile(`[${requestId}] Stack trace: ${error.stack}`, 'ERROR');
+    res.status(500).json({ error: 'Failed to search for YouTube URLs', details: error.message });
   }
 });
 

@@ -104,15 +104,25 @@ app.get('/changelog', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/public/changelog.html'));
 });
 
-// Catch-all handler for SPA
+// Catch-all handler for SPA (but not for API routes)
 app.get('*', (req, res) => {
+  // Don't serve the SPA for API routes
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
   res.sendFile(path.join(__dirname, '../client/public/index.html'));
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  
+  // For API routes, always return JSON
+  if (req.path.startsWith('/api/')) {
+    res.status(500).json({ error: 'Something went wrong!', details: err.message });
+  } else {
+    res.status(500).json({ error: 'Something went wrong!' });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
