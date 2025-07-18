@@ -1,243 +1,93 @@
 # Playlistifier Web
 
-A modern web application for converting playlists from Spotify and YouTube into downloadable MP3 files with proper metadata and artwork.
+> **🎵 Convert Spotify and YouTube playlists to high-quality MP3 files with embedded metadata and artwork**
 
-## Features
+[![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)](https://github.com/WACOMalt/playlistifier-web/releases)
+[![Node.js](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/license-ISC-yellow.svg)](LICENSE)
 
-- **Universal Playlist Support**: Spotify playlists, albums, tracks, and YouTube playlists, channels, videos
-- **Real-time Progress Tracking**: Live updates during download process
-- **Secure Authentication**: OAuth 2.0 PKCE flow for Spotify (no client secrets required)
-- **Metadata Embedding**: Automatic MP3 metadata and artwork embedding
-- **Responsive Design**: Works on desktop and mobile devices
-- **Batch Downloads**: Process multiple tracks simultaneously
+A modern, full-stack web application that transforms your music playlists into organized, downloadable audio files with professional-grade metadata and artwork embedding.
 
-## Prerequisites
+## ✨ Key Features
 
-Before running Playlistifier Web, ensure you have:
+- **🔄 Real-time Progress**: Live WebSocket updates during downloads
+- **🔐 Secure Authentication**: OAuth 2.0 PKCE flow (no client secrets)
+- **⚡ Concurrent Processing**: Configurable parallel downloads (1-20 simultaneous)
+- **🎨 Quality Metadata**: Automatic ID3 tags and artwork embedding
+- **🌐 Cross-Platform**: Works on Windows, macOS, and Linux
+- **📱 Modern UI**: Responsive design with Windows 98 aesthetic
 
-1. **Node.js 18+** installed
-2. **yt-dlp** installed and accessible in your PATH
-3. **ffmpeg** installed and accessible in your PATH
-4. **Spotify Developer Account** for API access (optional - uses built-in client ID by default)
+## 🚀 Supported Platforms
 
-### Installing Dependencies
+| Platform | Content Types | Authentication |
+|----------|---------------|----------------|
+| **Spotify** | Playlists, Albums, Tracks | Hybrid (Public + OAuth) |
+| **YouTube** | Playlists, Channels, Videos | Public API |
 
-#### Windows:
-```bash
-# Install yt-dlp
-winget install yt-dlp
-# Or download from: https://github.com/yt-dlp/yt-dlp/releases
+## 📖 Documentation
 
-# Install ffmpeg
-winget install ffmpeg
-# Or download from: https://ffmpeg.org/download.html
-```
+**📚 [Complete Documentation Wiki →](https://github.com/WACOMalt/playlistifier-web/wiki)**
 
-#### macOS:
-```bash
-# Install with Homebrew
-brew install yt-dlp ffmpeg
-```
+For comprehensive documentation, technical details, and implementation guides, visit our wiki:
 
-#### Linux:
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install yt-dlp ffmpeg
+- **[Project Overview](https://github.com/WACOMalt/playlistifier-web/wiki)** - Start here for project introduction
+- **[Executive Summary](https://github.com/WACOMalt/playlistifier-web/wiki/Executive-Summary)** - Business overview and value proposition
+- **[Project Analysis](https://github.com/WACOMalt/playlistifier-web/wiki/Project-Analysis)** - Technical architecture and features
+- **[Technical Deep Dive](https://github.com/WACOMalt/playlistifier-web/wiki/Technical-Deep-Dive)** - Implementation details
+- **[Version History](https://github.com/WACOMalt/playlistifier-web/wiki/Version-History)** - Changelog and development timeline
 
-# Or install yt-dlp via pip
-pip install yt-dlp
-```
+## ⚡ Quick Start
 
-## Installation
+### Prerequisites
+- **Node.js 18+**
+- **yt-dlp** (auto-installed via `npm run setup`)
+- **ffmpeg** (auto-installed via `npm run setup`)
 
-1. **Clone or extract the project:**
-   ```bash
-   cd playlistifier-web
-   ```
-
-2. **Install Node.js dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Download required tools (yt-dlp and ffmpeg):**
-   ```bash
-   npm run setup
-   ```
-
-4. **Set up environment variables:**
-   ```bash
-   cp .env.example .env
-   ```
-
-5. **Configure your `.env` file:**
-   ```env
-   NODE_ENV=development
-   PORT=3000
-   SESSION_SECRET=your-secure-session-secret
-   SPOTIFY_REDIRECT_URI=http://127.0.0.1:8888/callback
-   DOWNLOAD_PATH=./downloads
-   ```
-
-### Spotify API Setup (Optional)
-
-Spotify playlists work out of the box with the built-in client ID. If you want to use your own Spotify app:
-
-1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Create a new app
-3. Set the redirect URI to: `http://127.0.0.1:8888/callback`
-4. Add `SPOTIFY_CLIENT_ID=your-client-id` to your `.env` file
-
-**Note**: No client secret is required as we use the PKCE flow.
-
-## Usage
-
-### Development Mode
+### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/WACOMalt/playlistifier-web.git
+cd playlistifier-web
+
+# Install dependencies
+npm install
+
+# Setup external tools
+npm run setup
+
+# Configure environment
+cp .env.example .env
+
+# Start development server
 npm run dev
 ```
 
-This starts the server with nodemon for automatic restarting on file changes.
+### Usage
 
-### Production Mode
+1. Navigate to `http://localhost:3000`
+2. Enter a playlist URL (Spotify or YouTube)
+3. Authenticate if required (Spotify private playlists)
+4. Review tracks and start download
+5. Monitor real-time progress
+6. Access files in `./downloads/` directory
 
-```bash
-npm start
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-```
-
-## How to Use
-
-1. **Start the server** and navigate to `http://localhost:3000`
-
-2. **Enter a URL** from one of the supported platforms:
-   - Spotify: `https://open.spotify.com/playlist/...`
-   - YouTube: `https://www.youtube.com/playlist?list=...`
-   - YouTube: `https://www.youtube.com/watch?v=...`
-
-3. **Authenticate** if required (Spotify playlists need authentication)
-
-4. **Review the tracks** found in the playlist
-
-5. **Start download** and monitor real-time progress
-
-6. **Access your files** in the downloads directory
-
-## Supported URL Types
+## 🔗 Supported URLs
 
 ### Spotify
 - Playlists: `https://open.spotify.com/playlist/ID`
 - Albums: `https://open.spotify.com/album/ID`
 - Tracks: `https://open.spotify.com/track/ID`
-- Spotify URIs: `spotify:playlist:ID`
 
 ### YouTube
 - Playlists: `https://www.youtube.com/playlist?list=ID`
 - Videos: `https://www.youtube.com/watch?v=ID`
-- Short URLs: `https://youtu.be/ID`
 - Channels: `https://www.youtube.com/channel/ID`
-- Handle URLs: `https://www.youtube.com/@username`
 
-## File Organization
-
-Downloads are organized in timestamped folders:
-```
-downloads/
-├── download-2025-01-13T12-00-00/
-│   ├── track_listing.txt
-│   ├── Artist - Track 1.mp3
-│   ├── Artist - Track 2.mp3
-│   └── ...
-```
-
-## API Endpoints
-
-### Core API
-- `POST /api/analyze` - Analyze URL and detect platform
-- `POST /api/extract` - Extract track information
-- `POST /api/download` - Start download process
-- `GET /api/download/:id/status` - Check download status
-
-### Authentication
-- `GET /api/auth/spotify` - Initiate Spotify OAuth
-- `POST /api/auth/spotify/callback` - Handle OAuth callback
-- `GET /api/auth/status` - Check authentication status
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NODE_ENV` | Environment (development/production) | `development` |
-| `PORT` | Server port | `3000` |
-| `SESSION_SECRET` | Session encryption secret | Required |
-| `SPOTIFY_CLIENT_ID` | Spotify app client ID | Optional |
-| `SPOTIFY_REDIRECT_URI` | OAuth redirect URI | `http://localhost:3000/auth/spotify/callback` |
-| `DOWNLOAD_PATH` | Download directory | `./downloads` |
-| `YTDLP_PATH` | Path to yt-dlp executable | `yt-dlp` |
-| `FFMPEG_PATH` | Path to ffmpeg executable | `ffmpeg` |
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"yt-dlp not found"**
-   - Ensure yt-dlp is installed and in your PATH
-   - Try specifying the full path in `YTDLP_PATH`
-
-2. **"ffmpeg not found"**
-   - Ensure ffmpeg is installed and in your PATH
-   - Try specifying the full path in `FFMPEG_PATH`
-
-3. **Spotify authentication fails**
-   - If using custom client ID, check your `SPOTIFY_CLIENT_ID` is correct
-   - Verify the redirect URI matches your app settings
-   - Ensure you're using `http://localhost:3000` (not `https`)
-   - Try removing custom client ID to use the built-in default
-
-4. **Downloads fail**
-   - Check that the `DOWNLOAD_PATH` directory is writable
-   - Verify internet connectivity
-   - Some content may be geo-restricted or unavailable
-
-### Debug Mode
-
-Set `NODE_ENV=development` for detailed error messages and logging.
-
-## Legal Notice
-
-This software is for personal use only. Users are responsible for:
-- Complying with platform terms of service
-- Ensuring they have rights to download content
-- Respecting copyright laws in their jurisdiction
-
-## Version History
-
-- **v1.0.0**: Initial web implementation
-  - Complete migration from PowerShell version
-  - Modern web interface with real-time progress
-  - Spotify and YouTube support
-  - Secure authentication and file management
-
-## Contributing
-
-This project follows semantic versioning:
-- **+0.01**: Bug fixes
-- **+0.10**: New features
-- **+1.00**: Major changes or milestones
-
-## License
+## 📄 License
 
 ISC License - See LICENSE file for details.
+
+## ⚖️ Legal Notice
+
+This software is for personal use only. Users are responsible for complying with platform terms of service and copyright laws.
