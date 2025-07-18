@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.3] - 2025-07-18
+
+### Added
+- Automatic version injection from package.json to all HTML pages
+- Collapsible changelog and FAQ sections with smooth animations
+- Visual indicators (arrows) for expanded/collapsed states
+
+### Improved
+- Version numbers now update automatically across all pages when package.json changes
+- Better user experience with collapsible sections on changelog page
+- Single source of truth for version management
+
+### Fixed
+- Eliminated need for manual version updates in multiple HTML files
+- Consistent version display across all pages
+
 ## [1.9.2] - 2025-07-18
 
 ### Fixed
