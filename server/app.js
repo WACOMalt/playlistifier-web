@@ -6,6 +6,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const session = require('express-session');
 const path = require('path');
+const fs = require('fs');
+const packageJson = require('../package.json');
 
 const app = express();
 const server = http.createServer(app);
@@ -62,14 +64,41 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files from client
-app.use(express.static(path.join(__dirname, '../client/public')));
-
 // API routes
 app.use('/api', require('./routes/api'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/download', require('./routes/download'));
 app.use('/api/search', require('./routes/search'));
+
+// HTML version injection middleware (before static files)
+app.use((req, res, next) => {
+  // Only process HTML file requests
+  if (req.path.endsWith('.html') || req.path === '/' || (!req.path.includes('.') && !req.path.startsWith('/api/'))) {
+    let htmlPath;
+    
+    if (req.path === '/changelog' || req.path === '/changelog.html') {
+      htmlPath = path.join(__dirname, '../client/public/changelog.html');
+    } else {
+      // Default to index.html for SPA routes
+      htmlPath = path.join(__dirname, '../client/public/index.html');
+    }
+    
+    fs.readFile(htmlPath, 'utf8', (err, data) => {
+      if (err) {
+        console.error('Error reading HTML file:', err);
+        return next(); // Let static middleware handle it
+      }
+      const htmlWithVersion = injectVersion(data);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(htmlWithVersion);
+    });
+  } else {
+    next();
+  }
+});
+
+// Serve static files from client (for CSS, JS, images, etc.)
+app.use(express.static(path.join(__dirname, '../client/public')));
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
@@ -99,19 +128,14 @@ io.on('connection', (socket) => {
 // Make io available to routes
 app.set('io', io);
 
-// Specific route for changelog page
-app.get('/changelog', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/public/changelog.html'));
-});
+// Function to inject version into HTML
+function injectVersion(htmlContent) {
+  return htmlContent.replace(
+    /Playlistifier Web v[0-9]+\.[0-9]+\.[0-9]+/g, 
+    `Playlistifier Web v${packageJson.version}`
+  );
+}
 
-// Catch-all handler for SPA (but not for API routes)
-app.get('*', (req, res) => {
-  // Don't serve the SPA for API routes
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'API endpoint not found' });
-  }
-  res.sendFile(path.join(__dirname, '../client/public/index.html'));
-});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

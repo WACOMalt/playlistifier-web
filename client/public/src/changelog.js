@@ -8,7 +8,46 @@ class ChangelogPage {
         // Load changelog when page loads
         document.addEventListener('DOMContentLoaded', () => {
             this.loadChangelog();
+            this.initCollapsible();
         });
+    }
+    
+    // Initialize collapsible functionality
+    initCollapsible() {
+        const collapsibleLinks = document.querySelectorAll('.collapsible');
+        
+        collapsibleLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleSection(link);
+            });
+        });
+        
+        // Start with FAQ expanded and changelog collapsed
+        const changelogLink = document.querySelector('.collapsible[data-target="#changelog-container"]');
+        if (changelogLink) {
+            this.toggleSection(changelogLink, true); // Force collapse
+        }
+    }
+    
+    // Toggle section visibility
+    toggleSection(link, forceCollapse = false) {
+        const targetSelector = link.getAttribute('data-target');
+        const target = document.querySelector(targetSelector);
+        
+        if (!target) return;
+        
+        const isCollapsed = link.classList.contains('collapsed') || forceCollapse;
+        
+        if (isCollapsed) {
+            // Expand
+            link.classList.remove('collapsed');
+            target.classList.remove('collapsed');
+        } else {
+            // Collapse
+            link.classList.add('collapsed');
+            target.classList.add('collapsed');
+        }
     }
 
     // Fetch and display changelog from GitHub

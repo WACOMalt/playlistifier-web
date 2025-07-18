@@ -167,6 +167,47 @@
             outline: 1px dotted #000;
             outline-offset: -4px;
         }
+        
+        /* Collapsible sections */
+        .collapsible {
+            color: #000080;
+            text-decoration: underline;
+            cursor: pointer;
+            font-weight: bold;
+            outline: none;
+        }
+        
+        .collapsible:hover {
+            color: #0000ff;
+        }
+        
+        .collapsible:active {
+            color: #ff0000;
+        }
+        
+        .collapsible-content {
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+            overflow: hidden;
+            opacity: 1;
+        }
+        
+        .collapsible-content.collapsed {
+            max-height: 0 !important;
+            opacity: 0;
+            padding: 0 !important;
+            border: none !important;
+            margin: 0 !important;
+        }
+        
+        .collapsible::after {
+            content: " ▼";
+            font-size: 10px;
+            color: #666;
+        }
+        
+        .collapsible.collapsed::after {
+            content: " ▶";
+        }
     </style>
 </head>
 <body>
@@ -193,8 +234,8 @@
                 <div class="window-body">
                     <!-- FAQ Section -->
                     <fieldset>
-                        <legend>Frequently Asked Questions</legend>
-                        <div class="faq-content">
+                        <legend><a href="#" class="collapsible" data-target="#faq-content">Frequently Asked Questions (click to toggle)</a></legend>
+                        <div id="faq-content" class="faq-content collapsible-content">
                             <div class="faq-question">What does this tool do?</div>
                             <div class="faq-answer">
                                 This Tool uses the Spotify Web Data API to look up your playlists and create a list of the tracks. It then does its best to search for those songs on YouTube. The tool then provides a list of individual YouTube URLs which can be used by the user. The tool also makes it easy to convert a Youtube Playlist into an easy list of individual video URLs. It does this using the official APIs for each service. In practice, this tool enables nothing a user of each service couldn't already do manually, it just makes it much easier!
@@ -274,8 +315,8 @@
 
                     <!-- Changelog Section -->
                     <fieldset>
-                        <legend>Changelog</legend>
-                        <div id="changelog-container" class="changelog-content">
+                        <legend><a href="#" class="collapsible" data-target="#changelog-container">Changelog (click to toggle)</a></legend>
+                        <div id="changelog-container" class="changelog-content collapsible-content">
                             <div class="loading-message">Loading changelog...</div>
                         </div>
                     </fieldset>
@@ -284,7 +325,7 @@
         </main>
 
         <footer>
-            <p>Playlistifier Web v1.5.0</p>
+            <p>Playlistifier Web v1.9.2</p>
         </footer>
     </div>
 
