@@ -1,6 +1,6 @@
 # Playlistifier Web
 
-Convert Spotify and YouTube playlists to lists of links, with optional yt-dlp powered download manager for discovered youtube links.
+Convert playlists to lists of links, with optional yt-dlp powered download manager for discovered youtube links.
 
 [![Version](https://img.shields.io/badge/version-1.9.0-blue.svg)](https://github.com/WACOMalt/playlistifier-web/releases)
 [![Node.js](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
